@@ -1,0 +1,70 @@
+diff --git a/src/common/recomp_runtime_ui.c b/src/common/recomp_runtime_ui.c
+index 809061c..5d09812 100644
+--- a/src/common/recomp_runtime_ui.c
++++ b/src/common/recomp_runtime_ui.c
+@@ -5,6 +5,13 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++/* Traductor opcional de los textos fijos del menu (lo pone el programa que
++ * usa la biblioteca; vacio = textos tal cual). */
++const char *(*recomp_runtime_ui_translate)(const char *text) = 0;
++static const char *ui_tr(const char *text) {
++    return recomp_runtime_ui_translate ? recomp_runtime_ui_translate(text) : text;
++}
++
+ static int same_text(const char *a, const char *b) {
+     if (!a) a = "";
+     if (!b) b = "";
+@@ -51,7 +58,7 @@ static void show_status(RecompRuntimeUi *ui, const char *text, unsigned frames)
+  * an empty component such as "A//B"), which is left out of the menu entirely
+  * rather than producing an unnamed or unreachable row. */
+ static const char *item_path(const RecompRuntimeUiItem *item) {
+-    const char *path = item->section && *item->section ? item->section : "Settings";
++    const char *path = item->section && *item->section ? item->section : ui_tr("Settings");
+     if (*path == '/') return NULL;
+     for (const char *p = path; *p; ++p)
+         if (*p == '/' && (p[1] == '/' || p[1] == '\0')) return NULL;
+@@ -422,7 +429,7 @@ int recomp_runtime_ui_confirm(RecompRuntimeUi *ui,
+         ui->confirm_item = NULL;
+         return 1;
+     }
+-    show_status(ui, prompt ? prompt : "Press again to confirm", 180);
++    show_status(ui, prompt ? prompt : ui_tr("Press again to confirm"), 180);
+     ui->confirm_item = item;
+     return 0;
+ }
+@@ -666,7 +673,7 @@ static void item_value(RecompRuntimeUi *ui, const RecompRuntimeUiItem *item,
+     if (!recomp_runtime_ui_current_value(ui, item, &value)) {
+         snprintf(out, out_size, "?");
+     } else if (item->type == RECOMP_RUNTIME_UI_BOOL) {
+-        snprintf(out, out_size, "%s", value ? "On" : "Off");
++        snprintf(out, out_size, "%s", value ? ui_tr("On") : ui_tr("Off"));
+     } else if (item->type == RECOMP_RUNTIME_UI_CHOICE && item->choices) {
+         size_t index = item->choice_count;
+         if (item->choice_values) {
+@@ -793,7 +800,7 @@ void recomp_runtime_ui_render_argb8888(RecompRuntimeUi *ui, void *pixels,
+          (unsigned)(238.0f * ui->opacity));
+     outline(pixels,width,height,pitch,panel_x,panel_y,panel_w,panel_h,
+             scale,accent);
+-    const char *title = ui->config.title ? ui->config.title : "Settings";
++    const char *title = ui->config.title ? ui->config.title : ui_tr("Settings");
+     const char *subtitle = ui->config.subtitle;
+     char breadcrumb[256];
+     if (ui->in_section && ui->page[0]) {
+@@ -865,13 +872,13 @@ void recomp_runtime_ui_render_argb8888(RecompRuntimeUi *ui, void *pixels,
+         }
+     }
+ 
+-    const char *help = "UP/DOWN SELECT  LEFT/RIGHT CHANGE  ENTER ACCEPT";
++    const char *help = ui_tr("UP/DOWN SELECT  LEFT/RIGHT CHANGE  ENTER ACCEPT");
+     if (ui->in_section) {
+         char folder[96];
+         const RecompRuntimeUiItem *item = recomp_runtime_ui_page_entry(
+             ui, ui->row_index, folder, sizeof(folder));
+         if (item && item->description && *item->description) help = item->description;
+-        else if (!item && folder[0]) help = "ENTER OPEN  ESC BACK";
++        else if (!item && folder[0]) help = ui_tr("ENTER OPEN  ESC BACK");
+     }
+     rect(pixels,width,height,pitch,panel_x+pad,footer_y-4*scale,
+          panel_w-pad*2,scale,border,255);

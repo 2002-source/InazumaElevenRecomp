@@ -1,0 +1,6 @@
+nombre=Entrenamiento libre
+descripcion=Menu para entrenar a tus jugadores: sube su nivel, PE, PT y estadisticas a cambio de Pasion.
+nombre_en=Free training
+descripcion_en=Menu to train your players: raise their level, GP, TP and stats in exchange for Passion.
+desbloqueo=Se abre hablando con el NPC entrenador de la Torre (activa tambien ese mod).
+desbloqueo_en=Opened by talking to the trainer NPC at the Tower (turn that mod on too).

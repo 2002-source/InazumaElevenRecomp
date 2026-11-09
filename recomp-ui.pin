@@ -1,0 +1,5 @@
+# recomp-ui version this port is built and tested with (runtime settings menu
+# library used by the ndsrecomp runner). runner-patches/parche_menu_barra.py
+# patches src/common/recomp_runtime_ui.c of this checkout.
+local_path = C:/dev/recomp-ui
+commit     = 3f1d6f122a58823614abce14f5b86f4d165a629c

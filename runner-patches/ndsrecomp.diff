@@ -1,0 +1,1093 @@
+diff --git a/runner/src/arm9_native.cpp b/runner/src/arm9_native.cpp
+index 3c44ba8..67901e7 100644
+--- a/runner/src/arm9_native.cpp
++++ b/runner/src/arm9_native.cpp
+@@ -14,6 +14,15 @@ std::string nds_arm9_native_json() { return "{\"available\":false}"; }
+ #include "arm_decode.h"
+ #include "thumb_decode.h"
+ #include "hle_mkds.h"
++// IE1_NATIVE_HLE: HLE de Inazuma Eleven en el modo JIT (parche_native_ie1.py)
++#if defined(NDS_IE1_CARD_HLE)
++#include "hle_ie1_card.h"
++static void (*ie1_native_hle(uint32_t pc,bool thumb))(void) {
++    return ie1_hle::resolve_card(NDS_ARM9,pc,thumb).function;
++}
++#else
++static void (*ie1_native_hle(uint32_t,bool))(void) {return nullptr;}
++#endif
+ #include "arm9_native_ir.h"
+ #include "arm9_native_watch.h"
+ #include "arm9_native_options.h"
+@@ -179,7 +188,7 @@ public:
+             }
+         }
+         if(bytes&&!thumb&&(*bytes&0x0c000000u)==0x0c000000u)native_encoding=false;
+-        if(!native_encoding||floor(decode(thumb,pc))||(!thumb&&mkds_hle::resolve(NDS_ARM9,pc,false).function)) {
++        if(!native_encoding||floor(decode(thumb,pc))||(!thumb&&(mkds_hle::resolve(NDS_ARM9,pc,false).function||ie1_native_hle(pc,false)))) {
+             ir.SetTerm(Dynarmic::IR::Term::Interpret{ir.current_location});return false;
+         }
+         return true;
+@@ -328,7 +337,8 @@ bool nds_arm9_native_run() {
+     if(n.pending&&!runtime_should_yield()) {
+         g_cpu.R[15]=n.pending_pc;
+         const auto hle=mkds_hle::resolve(NDS_ARM9,n.pending_pc,(g_cpu.cpsr&CPSR_T_BIT)!=0);
+-        if(hle.function)hle.function();else tier3_step_one(n.pending_pc);
++        auto* ie1=hle.function?nullptr:ie1_native_hle(n.pending_pc,(g_cpu.cpsr&CPSR_T_BIT)!=0);  // IE1_NATIVE_HLE
++        if(hle.function)hle.function();else if(ie1)ie1();else tier3_step_one(n.pending_pc);
+     }
+     runtime_tick(0);
+     return true;
+diff --git a/runner/src/frontend.cpp b/runner/src/frontend.cpp
+index 0e4388d..10adb83 100644
+--- a/runner/src/frontend.cpp
++++ b/runner/src/frontend.cpp
+@@ -1,3 +1,5 @@
++// IE1_MENU_BARRA: traductor para los textos fijos de la biblioteca del menu
++extern "C" { extern const char *(*recomp_runtime_ui_translate)(const char *); const char *ie1_tr_c(const char *); }
+ #include "frontend.h"
+ #include "host_profile.h"
+ 
+@@ -701,7 +703,7 @@ MphPrimeBindingSet make_mph_prime_bindings(
+ constexpr int kWindowScale = 2;
+ constexpr uint64_t kSystemCyclesPerFrame = 2130ull * 263ull;
+ constexpr int kAudioFrequency = 33513982 / 1024;
+-constexpr uint32_t kAudioQueueFrames = 2048;
++constexpr uint32_t kAudioQueueFrames = 6144;  // IE1_AUDIO (original 2048)
+ // Playback starts only once kAudioStartFrames (~1.5 s) are queued. The cold
+ // boot's frames ~5-131 emulate below real time with a measured cumulative
+ // production deficit of up to ~1.15 s; prebuffering more than that rides the
+@@ -909,7 +911,55 @@ SDL_JoystickID sdl_controller_id(SDL_GameController* controller) {
+ #endif
+ }
+ 
++// IE1_CONTROLES: teclas de controles.cfg (las elige el lanzador)
++// IE1_CONTROLES_MENU: la tabla tambien se cambia desde el menu Esc
++std::array<SDL_Scancode, 12> g_ie1_tabla{SDL_SCANCODE_Z, SDL_SCANCODE_X, SDL_SCANCODE_BACKSPACE,
++    SDL_SCANCODE_RETURN, SDL_SCANCODE_RIGHT, SDL_SCANCODE_LEFT, SDL_SCANCODE_UP, SDL_SCANCODE_DOWN,
++    SDL_SCANCODE_W, SDL_SCANCODE_Q, SDL_SCANCODE_S, SDL_SCANCODE_A};
++const std::array<SDL_Scancode, 12>* ie1_controles() {
++    std::array<SDL_Scancode, 12>& tabla = g_ie1_tabla;
++    static int estado = -1;            // -1 sin leer, 0 sin archivo, 1 cargado
++    if (estado < 0) {
++        estado = 0;
++        static const char* kClaves[12] = {"A", "B", "SELECT", "START", "DERECHA", "IZQUIERDA",
++                                          "ARRIBA", "ABAJO", "R", "L", "X", "Y"};
++        std::FILE* f = std::fopen("controles.cfg", "r");
++        if (f) {
++            char linea[256];
++            while (std::fgets(linea, sizeof linea, f)) {
++                std::string l(linea);
++                while (!l.empty() && (l.back() == '\n' || l.back() == '\r' || l.back() == ' ')) l.pop_back();
++                const size_t e = l.find('=');
++                if (l.empty() || l[0] == '#' || e == std::string::npos) continue;
++                const std::string k = l.substr(0, e), v = l.substr(e + 1);
++                for (int i = 0; i < 12; ++i)
++                    if (k == kClaves[i]) {
++                        const SDL_Scancode sc = SDL_GetScancodeFromName(v.c_str());
++                        if (sc != SDL_SCANCODE_UNKNOWN) { tabla[size_t(i)] = sc; estado = 1; }
++                    }
++            }
++            std::fclose(f);
++            if (estado == 1) std::fprintf(stderr, "[controles] teclas de controles.cfg\n");
++        }
++    }
++    return &tabla;                     // IE1_CONTROLES_MENU: siempre la tabla (por defecto, la de siempre)
++}
++void ie1_controles_guardar() {
++    static const char* kClaves[12] = {"A", "B", "SELECT", "START", "DERECHA", "IZQUIERDA",
++                                      "ARRIBA", "ABAJO", "R", "L", "X", "Y"};
++    if (std::FILE* f = std::fopen("controles.cfg", "w")) {
++        std::fprintf(f, "# Teclado -> botones de la DS (nombres de tecla de SDL)\n");
++        for (int i = 0; i < 12; ++i) std::fprintf(f, "%s=%s\n", kClaves[i], SDL_GetScancodeName(g_ie1_tabla[size_t(i)]));
++        std::fclose(f);
++    }
++}
++
+ uint16_t key_bit(SDL_Scancode key) {
++    if (const auto* t = ie1_controles()) {          // IE1_CONTROLES
++        for (size_t i = 0; i < t->size(); ++i)
++            if ((*t)[i] == key && key != SDL_SCANCODE_UNKNOWN) return uint16_t(1u << i);
++        return 0;
++    }
+     // KEYINPUT/EXTKEYIN are active-low. This layout follows the common DS
+     // emulator convention: Z/X = A/B, A/S = Y/X, Q/W = L/R.
+     switch (key) {
+@@ -998,6 +1048,15 @@ void ie1_cfg_cargar();
+ void ie1_cfg_guardar_si_cambia();
+ // IE1_MODS_MENU: seccion Mods (parche_menu_mods.py)
+ extern "C" int ie1_mods_hay();
++extern "C" void ie1_mods_fotograma();  // IE1_TRUCOS
++// IE1_OVERLAY: menu propio de los mods (parche_overlay.py)
++extern "C" int ie1_overlay_disponible();
++extern "C" int ie1_overlay_activo();
++extern "C" void ie1_overlay_alternar();
++extern "C" void ie1_overlay_teclas(uint16_t pulsados);
++extern "C" void ie1_overlay_toque(int x, int y, int abajo);  // IE1_OVERLAY_TACTIL
++extern "C" int ie1_overlay_dibujar(const uint32_t*, int, const uint32_t*, int,
++                                   const uint32_t**, const uint32_t**);
+ extern "C" int ie1_mods_num();
+ extern "C" const char* ie1_mods_nombre(int i);
+ extern "C" int ie1_mods_activo(int i);
+@@ -1044,7 +1103,239 @@ bool ie1_key(const RecompRuntimeUiItem* item, const char* key) {
+     return item && item->key && std::strcmp(item->key, key) == 0;
+ }
+ 
++// IE1_CONTROLES_MENU: VSync y teclas en el menu Esc
++const std::array<SDL_Scancode, 12>* ie1_controles();
++void ie1_controles_guardar();
++extern std::array<SDL_Scancode, 12> g_ie1_tabla;
++int g_ie1_vsync = -1;
++bool g_ie1_req_vsync = false;
++constexpr const char* kIe1VsyncKey = "ie1.vsync";
++const char* const kIe1VsyncChoices[] = {"No", "Si"};
++const char* const kIe1CtlKeys[12] = {"ie1.ctl.0", "ie1.ctl.1", "ie1.ctl.2", "ie1.ctl.3", "ie1.ctl.4", "ie1.ctl.5",
++                                     "ie1.ctl.6", "ie1.ctl.7", "ie1.ctl.8", "ie1.ctl.9", "ie1.ctl.10", "ie1.ctl.11"};
++const char* const kIe1Teclas[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
++    "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
++    "Return", "Backspace", "Space", "Tab", "Up", "Down", "Left", "Right",
++    "Keypad 0", "Keypad 1", "Keypad 2", "Keypad 3", "Keypad 4", "Keypad 5", "Keypad 6", "Keypad 7", "Keypad 8",
++    "Keypad 9", "Keypad Enter", "Right Shift", "Right Ctrl", "Left Alt", "Home", "End", "PageUp", "PageDown",
++    "Insert", "Delete"};
++constexpr int kIe1NumTeclas = int(sizeof(kIe1Teclas) / sizeof(kIe1Teclas[0]));
++int ie1_ctl_indice(const RecompRuntimeUiItem* item) {
++    for (int i = 0; i < 12; ++i) if (ie1_key(item, kIe1CtlKeys[i])) return i;
++    return -1;
++}
++// IE1_MENU_TRADUCCION: menu de Esc en el idioma de los textos (es / resto en ingles)
++struct Ie1Traduccion { const char* original; const char* es; const char* en; };
++const Ie1Traduccion kIe1Traducciones[] = {
++        {"UP/DOWN SELECT  LEFT/RIGHT CHANGE  ENTER ACCEPT", "ARRIBA/ABAJO ELEGIR  IZQ/DER CAMBIAR  INTRO ACEPTAR", "UP/DOWN SELECT  LEFT/RIGHT CHANGE  ENTER ACCEPT"},
++        {"ENTER OPEN  ESC BACK", "INTRO ABRIR  ESC VOLVER", "ENTER OPEN  ESC BACK"},
++        {"Press again to confirm", "Pulsa otra vez para confirmar", "Press again to confirm"},
++        {"On", "Si", "On"},
++        {"Off", "No", "Off"},
++        {"Mouse sensitivity", "Sensibilidad del raton", "Mouse sensitivity"},
++        {"Prime Controls relative aim speed.", "Velocidad del raton.", "Mouse speed."},
++        {"Mouse", "Raton", "Mouse"},
++        {"Settings", "Ajustes", "Settings"},
++        {"Return", "Intro", "Enter"},
++        {"Backspace", "Retroceso", "Backspace"},
++        {"Space", "Espacio", "Space"},
++        {"Tab", "Tab", "Tab"},
++        {"Up", "Arriba", "Up"},
++        {"Down", "Abajo", "Down"},
++        {"Left", "Izquierda", "Left"},
++        {"Right", "Derecha", "Right"},
++        {"Keypad Enter", "Intro (teclado num.)", "Keypad Enter"},
++        {"Right Shift", "Mayus derecha", "Right Shift"},
++        {"Right Ctrl", "Ctrl derecho", "Right Ctrl"},
++        {"Left Alt", "Alt izquierdo", "Left Alt"},
++        {"Home", "Inicio", "Home"},
++        {"End", "Fin", "End"},
++        {"PageUp", "Re Pag", "Page Up"},
++        {"PageDown", "Av Pag", "Page Down"},
++        {"Insert", "Insertar", "Insert"},
++        {"Delete", "Suprimir", "Delete"},
++        {"Keypad 0", "0 (teclado num.)", "Keypad 0"},
++        {"Keypad 1", "1 (teclado num.)", "Keypad 1"},
++        {"Keypad 2", "2 (teclado num.)", "Keypad 2"},
++        {"Keypad 3", "3 (teclado num.)", "Keypad 3"},
++        {"Keypad 4", "4 (teclado num.)", "Keypad 4"},
++        {"Keypad 5", "5 (teclado num.)", "Keypad 5"},
++        {"Keypad 6", "6 (teclado num.)", "Keypad 6"},
++        {"Keypad 7", "7 (teclado num.)", "Keypad 7"},
++        {"Keypad 8", "8 (teclado num.)", "Keypad 8"},
++        {"Keypad 9", "9 (teclado num.)", "Keypad 9"},
++        {"Mods", "Mods", "Mods"},
++        {"Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).", "Activa o desactiva el mod. Se aplica al reiniciar (Sistema > Reiniciar).", "Turns the mod on or off. Applied on restart (System > Restart)."},
++        {"System", "Sistema", "System"},
++        {"Reiniciar", "Reiniciar", "Restart"},
++        {"Cierra y vuelve a abrir el juego (por ejemplo, para aplicar el idioma).", "Cierra y vuelve a abrir el juego (por ejemplo, para aplicar el idioma).", "Closes and reopens the game (for example, to apply the language)."},
++        {"Idioma", "Idioma", "Language"},
++        {"Textos", "Textos", "Text"},
++        {"Idioma de textos y menus. Se aplica al reiniciar el juego.", "Idioma de textos y menus. Se aplica al reiniciar el juego.", "Language of texts and menus. Applied when the game restarts."},
++        {"Voces", "Voces", "Voices"},
++        {"Idioma de las voces. Se aplica al reiniciar el juego.", "Idioma de las voces. Se aplica al reiniciar el juego.", "Language of the voices. Applied when the game restarts."},
++        {"Estados", "Estados", "Save states"},
++        {"Ranura", "Ranura", "Slot"},
++        {"Ranura que usan Guardar y Cargar estado.", "Ranura que usan Guardar y Cargar estado.", "Slot used by Save and Load state."},
++        {"Guardar estado", "Guardar estado", "Save state"},
++        {"Guarda la partida en la ranura elegida.", "Guarda la partida en la ranura elegida.", "Saves the game to the selected slot."},
++        {"Cargar estado", "Cargar estado", "Load state"},
++        {"Carga la partida de la ranura elegida.", "Carga la partida de la ranura elegida.", "Loads the game from the selected slot."},
++        {"Pantalla", "Pantalla", "Display"},
++        {"Modo", "Modo", "Mode"},
++        {"Ventana o pantalla completa.", "Ventana o pantalla completa.", "Window or fullscreen."},
++        {"Tamano de ventana", "Tamano de ventana", "Window size"},
++        {"Tamano de la ventana en modo ventana.", "Tamano de la ventana en modo ventana.", "Size of the window in windowed mode."},
++        {"Disposicion", "Disposicion", "Layout"},
++        {"Pantallas una encima de otra o lado a lado.", "Pantallas una encima de otra o lado a lado.", "Screens stacked or side by side."},
++        {"Escalado", "Escalado", "Scaling"},
++        {"Llenar la ventana o escala entera sin deformar pixeles.", "Llenar la ventana o escala entera sin deformar pixeles.", "Fill the window, or integer scaling without distorting pixels."},
++        {"VSync", "VSync", "VSync"},
++        {"Sincroniza la imagen con el monitor (evita cortes en la imagen).", "Sincroniza la imagen con el monitor (evita cortes en la imagen).", "Syncs the picture with the monitor (avoids tearing)."},
++        {"Controles", "Controles", "Controls"},
++        {"Arriba", "Arriba", "Up"},
++        {"Abajo", "Abajo", "Down"},
++        {"Izquierda", "Izquierda", "Left"},
++        {"Derecha", "Derecha", "Right"},
++        {"Tecla del boton A.", "Tecla del boton A.", "Key for the A button."},
++        {"Tecla del boton B.", "Tecla del boton B.", "Key for the B button."},
++        {"Tecla del boton X.", "Tecla del boton X.", "Key for the X button."},
++        {"Tecla del boton Y.", "Tecla del boton Y.", "Key for the Y button."},
++        {"Tecla del boton L.", "Tecla del boton L.", "Key for the L button."},
++        {"Tecla del boton R.", "Tecla del boton R.", "Key for the R button."},
++        {"Tecla del boton Start.", "Tecla del boton Start.", "Key for the Start button."},
++        {"Tecla del boton Select.", "Tecla del boton Select.", "Key for the Select button."},
++        {"Tecla de la cruceta: arriba.", "Tecla de la cruceta: arriba.", "Key for D-pad up."},
++        {"Tecla de la cruceta: abajo.", "Tecla de la cruceta: abajo.", "Key for D-pad down."},
++        {"Tecla de la cruceta: izquierda.", "Tecla de la cruceta: izquierda.", "Key for D-pad left."},
++        {"Tecla de la cruceta: derecha.", "Tecla de la cruceta: derecha.", "Key for D-pad right."},
++        {"Input", "Entrada", "Input"},
++        {"Resume game", "Volver al juego", "Resume game"},
++        {"Close settings and return to the game.", "Cierra el menu y vuelve al juego.", "Close settings and return to the game."},
++        {"Quit", "Salir", "Quit"},
++        {"Close the runner.", "Cierra el juego.", "Close the game."},
++        {"Audio", "Audio", "Audio"},
++        {"Volume", "Volumen", "Volume"},
++        {"Desactivado", "Desactivado", "Off"},
++        {"Activado", "Activado", "On"},
++        {"Ventana", "Ventana", "Window"},
++        {"Pantalla completa", "Pantalla completa", "Fullscreen"},
++        {"Vertical", "Vertical", "Vertical"},
++        {"Horizontal", "Horizontal", "Horizontal"},
++        {"Llenar", "Llenar", "Fill"},
++        {"Entero (nitido)", "Entero (nitido)", "Integer (sharp)"},
++        {"No", "No", "Off"},
++        {"Si", "Si", "On"},
++        {"Espanol", "Espanol", "Spanish"},
++        {"Ingles", "Ingles", "English"},
++        {"Japones", "Japones", "Japanese"},
++        {"Frances", "Frances", "French"},
++        {"Aleman", "Aleman", "German"},
++        {"Italiano", "Italiano", "Italian"},
++        {"Runtime Settings", "Ajustes", "Settings"},
++        {"A / Enter", "A / Intro", "A / Enter"},
++        {"B / Backspace", "B / Retroceso", "B / Backspace"},
++};
++bool ie1_menu_en_espanol() {
++    static int es = -1;
++    if (es < 0) {
++        std::string idioma = "en";
++        if (const char* e = std::getenv("IE1_TEXTOS"); e && *e) idioma = e;
++        else if (std::FILE* f = std::fopen("idiomas.cfg", "r")) {
++            char l[128];
++            while (std::fgets(l, sizeof l, f))
++                if (!std::strncmp(l, "textos=", 7)) {
++                    idioma = l + 7;
++                    while (!idioma.empty() && (idioma.back() == '\n' || idioma.back() == '\r' || idioma.back() == ' ')) idioma.pop_back();
++                }
++            std::fclose(f);
++        }
++        es = idioma == "es" ? 1 : 0;
++    }
++    return es == 1;
++}
++const char* ie1_tr(const char* t) {
++    if (!t) return t;
++    const bool es = ie1_menu_en_espanol();
++    for (const auto& x : kIe1Traducciones)
++        if (!std::strcmp(t, x.original)) return es ? x.es : x.en;
++    static std::vector<std::string> avisados;
++    if (*t && std::find(avisados.begin(), avisados.end(), t) == avisados.end()) {
++        avisados.push_back(t);
++        std::fprintf(stderr, "[menu] sin traducir: \"%s\"\n", t);
++    }
++    return t;
++}
++// IE1_MENU_INFO_MODS: nombre y descripcion de cada mod (mod.txt), en su idioma
++std::string ie1_mod_campo(int i, const char* clave) {
++    const char* carpeta = ie1_mods_nombre(i);
++    if (!carpeta || !*carpeta) return {};
++    std::vector<std::string> dirs;
++    if (const char* e = std::getenv("IE1_MODS_DIR"); e && *e) dirs.push_back(e);
++    dirs.push_back("../mods"); dirs.push_back("mods");
++    for (const auto& d : dirs) {
++        std::FILE* f = std::fopen((d + "/" + carpeta + "/mod.txt").c_str(), "r");
++        if (!f) continue;
++        std::string base, en, l;
++        char linea[1024];
++        const std::string k = clave, ken = k + "_en";
++        while (std::fgets(linea, sizeof linea, f)) {
++            l = linea;
++            while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
++            const size_t eq = l.find('=');
++            if (eq == std::string::npos) continue;
++            if (l.compare(0, eq, k) == 0 && eq == k.size()) base = l.substr(eq + 1);
++            if (l.compare(0, eq, ken) == 0 && eq == ken.size()) en = l.substr(eq + 1);
++        }
++        std::fclose(f);
++        return (!ie1_menu_en_espanol() && !en.empty()) ? en : base;
++    }
++    return {};
++}
++const char* ie1_mod_nombre_ui(int i, const char* respaldo) {
++    static std::string nombres[8];
++    if (i < 0 || i >= 8) return respaldo;
++    nombres[i] = ie1_mod_campo(i, "nombre");
++    return nombres[i].empty() ? respaldo : nombres[i].c_str();
++}
++const char* ie1_mod_descripcion(int i) {   // IE1_MENU_INFO_MODS2: una sola linea
++    (void)i;
++    return ie1_menu_en_espanol() ? "Activar o desactivar (al reiniciar). Info: lanzador, Tab."
++                                 : "Turn on or off (on restart). Info: launcher, Tab.";
++}
++
++const RecompRuntimeUiItem* ie1_traducir_menu(const RecompRuntimeUiItem* items, size_t n) {
++    static std::vector<RecompRuntimeUiItem> trad;
++    static std::vector<std::vector<const char*>> opciones;
++    trad.assign(items, items + n);
++    opciones.assign(n, {});
++    for (size_t i = 0; i < n; ++i) {
++        trad[i].section = ie1_tr(trad[i].section);
++        const bool de_mod = trad[i].section && !std::strcmp(items[i].section, "Mods");
++        if (!de_mod) {
++            trad[i].label = ie1_tr(trad[i].label);
++            trad[i].description = ie1_tr(trad[i].description);
++        }
++        if (trad[i].choices && trad[i].choice_count) {
++            for (size_t k = 0; k < trad[i].choice_count; ++k) opciones[i].push_back(ie1_tr(trad[i].choices[k]));
++            trad[i].choices = opciones[i].data();
++        }
++    }
++    return trad.data();
++}
++
+ int ie1_menu_get(const RecompRuntimeUiItem* item, int* value) {
++    if (ie1_key(item, kIe1VsyncKey)) {
++        if (g_ie1_vsync < 0) { const char* v = std::getenv("IE1_VSYNC"); g_ie1_vsync = (v && v[0] == '1') ? 1 : 0; }
++        *value = g_ie1_vsync; return 1;
++    }
++    if (const int c = ie1_ctl_indice(item); c >= 0) {
++        ie1_controles();
++        const char* nom = SDL_GetScancodeName(g_ie1_tabla[size_t(c)]);
++        *value = 0;
++        for (int k = 0; k < kIe1NumTeclas; ++k) if (!std::strcmp(nom, kIe1Teclas[k])) *value = k;
++        return 1;
++    }
+     if (const int m = ie1_mod_slot(item); m >= 0) { *value = ie1_mods_activo(m); return 1; }  // IE1_MODS_MENU
+     if (ie1_key(item, kIe1TxtKey)) { ie1_lang_init(); *value = g_ie1_lang_txt; return 1; }  // IE1_IDIOMAS_MENU
+     if (ie1_key(item, kIe1VozKey)) { ie1_lang_init(); *value = g_ie1_lang_voz; return 1; }
+@@ -1057,6 +1348,18 @@ int ie1_menu_get(const RecompRuntimeUiItem* item, int* value) {
+ }
+ 
+ int ie1_menu_set(const RecompRuntimeUiItem* item, int value) {
++    if (ie1_key(item, kIe1VsyncKey)) {  // IE1_CONTROLES_MENU
++        g_ie1_vsync = value ? 1 : 0; g_ie1_req_vsync = true; return 1;
++    }
++    if (const int c = ie1_ctl_indice(item); c >= 0) {
++        if (value < 0 || value >= kIe1NumTeclas) return 0;
++        ie1_controles();
++        const SDL_Scancode sc = SDL_GetScancodeFromName(kIe1Teclas[value]);
++        if (sc == SDL_SCANCODE_UNKNOWN) return 0;
++        g_ie1_tabla[size_t(c)] = sc;
++        ie1_controles_guardar();
++        return 1;
++    }
+     if (const int m = ie1_mod_slot(item); m >= 0) {  // IE1_MODS_MENU
+         if (m >= ie1_mods_num()) return 0;
+         ie1_mods_cambiar(m, value != 0);
+@@ -1163,6 +1466,7 @@ void set_touch_from_mouse(float x, float y, bool down,
+         : static_cast<float>((logical_width - kScreenWidth) / 2);
+     if (!down || x < left || x >= left + kScreenWidth ||
+         y < bottom_origin || y >= bottom_origin + kScreenHeight) {
++        if (ie1_overlay_activo()) ie1_overlay_toque(0, 0, 0);  // IE1_OVERLAY_TACTIL
+         nds_set_touch(0, 0, false);
+         return;
+     }
+@@ -1170,6 +1474,11 @@ void set_touch_from_mouse(float x, float y, bool down,
+         static_cast<int>(x - left), 0, kScreenWidth - 1));
+     const auto touch_y = static_cast<uint16_t>(std::clamp<int>(
+         static_cast<int>(y - bottom_origin), 0, kScreenHeight - 1));
++    if (ie1_overlay_activo()) {  // IE1_OVERLAY_TACTIL: el toque es para el menu, no para el juego
++        ie1_overlay_toque(touch_x, touch_y, 1);
++        nds_set_touch(0, 0, false);
++        return;
++    }
+     nds_set_touch(touch_x, touch_y, true);
+ }
+ 
+@@ -1710,6 +2019,13 @@ SDL_Renderer* create_renderer(SDL_Window* window) {
+     if (!renderer) renderer = SDL_CreateRenderer(window, nullptr);
+     if (!renderer)
+         renderer = SDL_CreateRenderer(window, "software");
++    if (renderer) {   // IE1_VSYNC: sincronizar con el monitor si lo pide el lanzador
++        const char* vs = std::getenv("IE1_VSYNC");
++        if (vs && vs[0] == '1') {
++            SDL_SetRenderVSync(renderer, 1);
++            std::fprintf(stderr, "[sdl] vsync: on\n");
++        }
++    }
+     if (renderer) {
+         const char* name = SDL_GetRendererName(renderer);
+         std::fprintf(stderr, "[sdl] render driver: %s\n",
+@@ -2199,12 +2515,18 @@ PresentationTicks present_screens(FrontendPresentation& presentation,
+                                   float virtual_stylus_y,
+                                   const char* savestate_notice) {
+     PresentationTicks ticks{};
++    // IE1_OVERLAY: el menu de los mods sustituye las imagenes mientras esta abierto
++    const uint32_t* ie1_arriba = top_pixels;
++    const uint32_t* ie1_abajo = bottom_pixels;
++    const bool ie1_ov = ie1_overlay_dibujar(top_pixels, top_width, bottom_pixels,
++                                            bottom_width, &ie1_arriba, &ie1_abajo) != 0;
++    if (ie1_ov) { top_pixels = ie1_arriba; bottom_pixels = ie1_abajo; }
+     if (presentation.gl_top) {
+ #if defined(NDS_HAVE_COMPUTE_RENDERER)
+         NdsGpu2dDirectFrame direct_frame{};
+         const bool latency = nds_frontend_latency::enabled.load(std::memory_order_relaxed);
+         const auto pool_begin = latency ? SDL_GetPerformanceCounter() : 0;
+-        const bool direct = nds_gpu2d_direct_frame(&direct_frame);
++        const bool direct = !ie1_ov && nds_gpu2d_direct_frame(&direct_frame);  // IE1_OVERLAY
+         if (latency) ticks.pool_wait = SDL_GetPerformanceCounter() - pool_begin;
+         NdsComputePresentTicks gl_ticks{};
+         gl_ticks.diagnostic = latency;
+@@ -2624,6 +2946,13 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+     // stick never fights explicit D-pad presses.
+     uint16_t stick_pressed = 0;
+     auto publish_keys = [&]() {
++        if (ie1_overlay_activo()) {  // IE1_OVERLAY: los botones van al menu, no al juego
++            ie1_overlay_teclas(static_cast<uint16_t>(
++                keyboard_pressed | controller_pressed | mouse_pressed |
++                mph_prime_pressed | stick_pressed));
++            nds_set_key_mask(0x0FFFu);
++            return;
++        }
+         nds_set_key_mask(static_cast<uint16_t>(
+             0x0FFFu &
+             ~(keyboard_pressed | controller_pressed | mouse_pressed |
+@@ -2636,23 +2965,23 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+     static const RecompRuntimeUiItem runtime_menu_items[] = {
+         // IE1_MENU
+         // IE1_MODS_MENU
+-        {kIe1ModKeys[0], "Mods", ie1_mod_label(0),
+-         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
++        {kIe1ModKeys[0], "Mods", ie1_mod_nombre_ui(0, ie1_mod_label(0)),
++         ie1_mod_descripcion(0),  // IE1_MENU_INFO_MODS
+          RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
+-        {kIe1ModKeys[1], "Mods", ie1_mod_label(1),
+-         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
++        {kIe1ModKeys[1], "Mods", ie1_mod_nombre_ui(1, ie1_mod_label(1)),
++         ie1_mod_descripcion(1),  // IE1_MENU_INFO_MODS
+          RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
+-        {kIe1ModKeys[2], "Mods", ie1_mod_label(2),
+-         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
++        {kIe1ModKeys[2], "Mods", ie1_mod_nombre_ui(2, ie1_mod_label(2)),
++         ie1_mod_descripcion(2),  // IE1_MENU_INFO_MODS
+          RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
+-        {kIe1ModKeys[3], "Mods", ie1_mod_label(3),
+-         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
++        {kIe1ModKeys[3], "Mods", ie1_mod_nombre_ui(3, ie1_mod_label(3)),
++         ie1_mod_descripcion(3),  // IE1_MENU_INFO_MODS
+          RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
+-        {kIe1ModKeys[4], "Mods", ie1_mod_label(4),
+-         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
++        {kIe1ModKeys[4], "Mods", ie1_mod_nombre_ui(4, ie1_mod_label(4)),
++         ie1_mod_descripcion(4),  // IE1_MENU_INFO_MODS
+          RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
+-        {kIe1ModKeys[5], "Mods", ie1_mod_label(5),
+-         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
++        {kIe1ModKeys[5], "Mods", ie1_mod_nombre_ui(5, ie1_mod_label(5)),
++         ie1_mod_descripcion(5),  // IE1_MENU_INFO_MODS
+          RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
+         {kIe1RestartKey, "System", "Reiniciar",  // IE1_MENU_EXTRA
+          "Cierra y vuelve a abrir el juego (por ejemplo, para aplicar el idioma).",
+@@ -2684,6 +3013,21 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+         {kIe1ScaleKey, "Pantalla", "Escalado",
+          "Llenar la ventana o escala entera sin deformar pixeles.",
+          RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1ScaleChoices, 2, nullptr},
++        {kIe1VsyncKey, "Pantalla", "VSync",  // IE1_CONTROLES_MENU
++         "Sincroniza la imagen con el monitor (evita cortes en la imagen).",
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1VsyncChoices, 2, nullptr},
++        {kIe1CtlKeys[0], "Controles", "A", "Tecla del boton A.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[1], "Controles", "B", "Tecla del boton B.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[10], "Controles", "X", "Tecla del boton X.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[11], "Controles", "Y", "Tecla del boton Y.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[9], "Controles", "L", "Tecla del boton L.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[8], "Controles", "R", "Tecla del boton R.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[3], "Controles", "Start", "Tecla del boton Start.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[2], "Controles", "Select", "Tecla del boton Select.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[6], "Controles", "Arriba", "Tecla de la cruceta: arriba.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[7], "Controles", "Abajo", "Tecla de la cruceta: abajo.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[5], "Controles", "Izquierda", "Tecla de la cruceta: izquierda.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
++        {kIe1CtlKeys[4], "Controles", "Derecha", "Tecla de la cruceta: derecha.", RECOMP_RUNTIME_UI_CHOICE, 0, kIe1NumTeclas - 1, 1, kIe1Teclas, size_t(kIe1NumTeclas), nullptr},
+         {kRuntimeMouseSensitivityKey, "Input", "Mouse sensitivity",
+          "Prime Controls relative aim speed.",
+          RECOMP_RUNTIME_UI_INT, 10, 400, 1, nullptr, 0, nullptr},
+@@ -2696,8 +3040,10 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+     };
+     RecompRuntimeUiConfig runtime_menu_config{};
+     runtime_menu_config.title = "Inazuma Eleven";  // IE1_MENU
+-    runtime_menu_config.subtitle = "Runtime Settings";
+-    runtime_menu_config.items = runtime_menu_items;
++    recomp_runtime_ui_translate = ie1_tr_c;   // IE1_MENU_BARRA
++    runtime_menu_config.subtitle = ie1_tr("Runtime Settings");   // IE1_MENU_TRADUCCION
++    runtime_menu_config.items = ie1_traducir_menu(runtime_menu_items,
++        sizeof(runtime_menu_items) / sizeof(runtime_menu_items[0]));
+     runtime_menu_config.item_count =
+         sizeof(runtime_menu_items) / sizeof(runtime_menu_items[0]);
+     runtime_menu_config.callbacks.context = &runtime_menu_state;
+@@ -2707,8 +3053,8 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+     runtime_menu_config.callbacks.is_enabled = runtime_menu_is_enabled;
+     runtime_menu_config.callbacks.save = runtime_menu_save;
+     runtime_menu_config.theme = "nds";
+-    runtime_menu_config.accept_label = "A / Enter";
+-    runtime_menu_config.back_label = "B / Backspace";
++    runtime_menu_config.accept_label = ie1_tr("A / Enter");
++    runtime_menu_config.back_label = ie1_tr("B / Backspace");
+     RecompRuntimeUi* runtime_ui =
+         recomp_runtime_ui_create(&runtime_menu_config);
+     if (!runtime_ui) {
+@@ -3509,6 +3855,10 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+                             nds_set_touch(0, 0, false);
+                         }
+                     }
++                } else if (scancode == SDL_SCANCODE_T && ie1_overlay_disponible()) {
++                    ie1_overlay_alternar();  // IE1_OVERLAY: menu de entrenamiento
++                    ie1_overlay_teclas(0xFFFFu);
++                    publish_keys();
+                 } else if (scancode == SDL_SCANCODE_ESCAPE) {
+                     if (relative_mouse.captured() || virtual_stylus_active())
+                         release_relative_mouse();
+@@ -4073,6 +4423,24 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+ #endif
+             SDL_PushEvent(&ie1_quit);
+         }
++        ie1_mods_fotograma();  // IE1_TRUCOS: trucos de los mods
++        if (g_ie1_req_vsync) {  // IE1_CONTROLES_MENU
++            g_ie1_req_vsync = false;
++            for (int r = 0; r < 2; ++r)
++                if (presentation.renderers[r]) SDL_SetRenderVSync(presentation.renderers[r], g_ie1_vsync);
++            // recordarlo tambien para el lanzador (lanzador.cfg)
++            std::string modo = "performance";
++            if (std::FILE* f = std::fopen("lanzador.cfg", "r")) {
++                char l[128];
++                while (std::fgets(l, sizeof l, f))
++                    if (!std::strncmp(l, "modo=", 5)) { modo = l + 5; while (!modo.empty() && (modo.back() == '\n' || modo.back() == '\r')) modo.pop_back(); }
++                std::fclose(f);
++            }
++            if (std::FILE* f = std::fopen("lanzador.cfg", "w")) {
++                std::fprintf(f, "# Ajustes del lanzador\nmodo=%s\nvsync=%d\n", modo.c_str(), g_ie1_vsync);
++                std::fclose(f);
++            }
++        }
+         // IE1_MENU: peticiones del menu de Esc
+         if (g_ie1_req.fullscreen) {
+             g_ie1_req.fullscreen = false;
+@@ -4915,3 +5283,6 @@ uint32_t nds_frontend_frame_digests(uint64_t from, uint32_t max,
+     if (after - from > kFrameDigestRing) return 0;
+     return copied;
+ }
++
++// IE1_MENU_BARRA
++extern "C" const char *ie1_tr_c(const char *t) { return ie1_tr(t); }
+diff --git a/runner/src/hle_ie1_card.cpp b/runner/src/hle_ie1_card.cpp
+index 9a93137..b5297f8 100644
+--- a/runner/src/hle_ie1_card.cpp
++++ b/runner/src/hle_ie1_card.cpp
+@@ -7,6 +7,12 @@
+ // al bufer 0x020BDB60 y copia la parte necesaria (MI_CpuCopy8), apuntando el
+ // bloque en 0x020AAE0C. Al final envia B8 (ID del chip) y lo compara; aqui no
+ // hace falta porque el cartucho emulado nunca se extrae. Devuelve r0 = r3.
++#include <cstring>
++#include <functional>
++#include <map>
++#include <string>
++#include <vector>
++#include <cstdlib>
+ #include "hle_ie1_card.h"
+ #include "hle_vector_math.h"
+ 
+@@ -68,6 +74,15 @@ std::array<uint8_t, kChipSize> chip_proof{};
+ NdsStaticValidation chip_validation{kChipEntry, kChipSize, chip_proof.data(), nullptr, 0};
+ uint64_t chip_calls = 0;
+ 
++// Idioma del juego (0x0209D61C): la version inglesa devuelve 0 y la espanola 4.
++// Elige la disposicion de algunos textos (p. ej. la pantalla de partidas); se
++// devuelve el del idioma de los textos (IE1_TEXTOS): en 0, fr 1, de/ge 2, it 3, es 4.
++constexpr uint32_t kIdiomaEntry = 0x0209D61Cu;
++constexpr uint32_t kIdiomaSize = 0x1Cu;            // 28 bytes
++constexpr const char* kIdiomaSha1 = "a14b013a8e12f6775e1b90d22a8c1bcff7d5acf5";
++std::array<uint8_t, kIdiomaSize> idioma_proof{};
++NdsStaticValidation idioma_validation{kIdiomaEntry, kIdiomaSize, idioma_proof.data(), nullptr, 0};
++
+ // Descompresion hacia atras (BLZ) de los overlays al cargarlos
+ constexpr uint32_t kBlzEntry = 0x02000950u;
+ constexpr uint32_t kBlzSize = 0xACu;               // 172 bytes
+@@ -165,7 +180,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+         std::array<uint8_t, kSize> live{};
+         if (!bus_range_has_write_provenance(pc, kSize) ||
+             !bus_debug_copy(0, pc, live.data(), kSize) ||
+-            gba::sha1(live.data(), kSize).hex() != kSha1)
++            (live != proof && gba::sha1(live.data(), kSize).hex() != kSha1))  // ya verificado: sin SHA-1
+             return {nullptr, &validation};
+         proof = live;
+         return {card_read, &validation};
+@@ -174,7 +189,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+         std::array<uint8_t, kLzSize> live{};
+         if (!bus_range_has_write_provenance(pc, kLzSize) ||
+             !bus_debug_copy(0, pc, live.data(), kLzSize) ||
+-            gba::sha1(live.data(), kLzSize).hex() != kLzSha1)
++            (live != lz_proof && gba::sha1(live.data(), kLzSize).hex() != kLzSha1))  // ya verificado: sin SHA-1
+             return {nullptr, &lz_validation};
+         lz_proof = live;
+         return {lz_uncompress, &lz_validation};
+@@ -183,16 +198,25 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+         std::array<uint8_t, kBlzSize> live{};
+         if (!bus_range_has_write_provenance(pc, kBlzSize) ||
+             !bus_debug_copy(0, pc, live.data(), kBlzSize) ||
+-            gba::sha1(live.data(), kBlzSize).hex() != kBlzSha1)
++            (live != blz_proof && gba::sha1(live.data(), kBlzSize).hex() != kBlzSha1))  // ya verificado: sin SHA-1
+             return {nullptr, &blz_validation};
+         blz_proof = live;
+         return {blz_uncompress, &blz_validation};
+     }
++    if (pc == kIdiomaEntry) {
++        std::array<uint8_t, kIdiomaSize> live{};
++        if (!bus_range_has_write_provenance(pc, kIdiomaSize) ||
++            !bus_debug_copy(0, pc, live.data(), kIdiomaSize) ||
++            (live != idioma_proof && gba::sha1(live.data(), kIdiomaSize).hex() != kIdiomaSha1))
++            return {nullptr, &idioma_validation};
++        idioma_proof = live;
++        return {idioma_juego, &idioma_validation};
++    }
+     if (pc == kChipEntry) {
+         std::array<uint8_t, kChipSize> live{};
+         if (!bus_range_has_write_provenance(pc, kChipSize) ||
+             !bus_debug_copy(0, pc, live.data(), kChipSize) ||
+-            gba::sha1(live.data(), kChipSize).hex() != kChipSha1)
++            (live != chip_proof && gba::sha1(live.data(), kChipSize).hex() != kChipSha1))  // ya verificado: sin SHA-1
+             return {nullptr, &chip_validation};
+         chip_proof = live;
+         return {chip_id, &chip_validation};
+@@ -201,7 +225,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+         std::array<uint8_t, kYuvSize> live{};
+         if (!bus_range_has_write_provenance(pc, kYuvSize) ||
+             !bus_debug_copy(0, pc, live.data(), kYuvSize) ||
+-            gba::sha1(live.data(), kYuvSize).hex() != kYuvSha1)
++            (live != yuv_proof && gba::sha1(live.data(), kYuvSize).hex() != kYuvSha1))  // ya verificado: sin SHA-1
+             return {nullptr, &yuv_validation};
+         yuv_proof = live;
+         return {yuv_convert, &yuv_validation};
+@@ -265,6 +289,18 @@ void blz_uncompress() {
+ // ROMCTRL y devuelve en r0 el ID del chip. El cartucho emulado nunca se
+ // extrae, asi que el ID es siempre el que el arranque guardo en 0x02FFFC00
+ // (el mismo con el que el juego lo compara despues en 0x0201234C).
++void idioma_juego() {
++    static int cod = -1;
++    if (cod < 0) {
++        const char* t = std::getenv("IE1_TEXTOS");
++        const std::string v = t ? t : "";
++        cod = v == "fr" ? 1 : (v == "de" || v == "ge") ? 2 : v == "it" ? 3 : v == "es" ? 4 : 0;
++        std::fprintf(stderr, "[hle] Inazuma Eleven: idioma del juego %d (%s)\n", cod, v.empty() ? "en" : v.c_str());
++    }
++    g_cpu.R[0] = uint32_t(cod);
++    nds_hle::finish(64u);
++}
++
+ void chip_id() {
+     if (chip_calls++ == 0)
+         std::fprintf(stderr, "[hle] Inazuma Eleven: ID del chip del cartucho HLE en uso\n");
+@@ -403,7 +439,84 @@ void lz_uncompress() {
+     nds_hle::finish(64u + static_cast<uint32_t>(written) * 4u);
+ }
+ 
++// Diagnostico (NDS_IE1_LOG_ARCHIVOS=1): escribe en el log que archivo de la ROM
++// lee el juego en cada momento, con su ruta. Sirve para saber que datos carga
++// al entrar en un mapa, abrir un menu, etc.
++void ie1_log_lectura(uint32_t src, uint32_t len) {
++    static int activo = -1;
++    if (activo < 0) { const char* e = std::getenv("NDS_IE1_LOG_ARCHIVOS"); activo = (e && *e == '1') ? 1 : 0; }
++    if (!activo) return;
++    static std::vector<std::pair<uint32_t, uint32_t>> fat;      // (inicio, fin) por archivo
++    static std::map<uint32_t, std::string> rutas;               // id -> ruta
++    static int ultimo = -2;
++    const auto& rom = ie1_hle_card_rom();
++    auto u32 = [&](size_t o) { return o + 4 <= rom.size() ? uint32_t(rom[o] | rom[o + 1] << 8 | rom[o + 2] << 16 | uint32_t(rom[o + 3]) << 24) : 0u; };
++    auto u16 = [&](size_t o) { return o + 2 <= rom.size() ? uint32_t(rom[o] | rom[o + 1] << 8) : 0u; };
++    if (fat.empty() && rom.size() > 0x200) {
++        const uint32_t fat_o = u32(0x48), fat_n = u32(0x4C) / 8, fnt_o = u32(0x40);
++        for (uint32_t i = 0; i < fat_n; ++i) fat.push_back({u32(fat_o + 8 * i), u32(fat_o + 8 * i + 4)});
++        std::function<void(uint32_t, const std::string&, int)> rec = [&](uint32_t id, const std::string& ruta, int prof) {
++            if (prof > 32) return;
++            const size_t ent = fnt_o + size_t(id & 0xFFF) * 8;
++            size_t q = fnt_o + u32(ent);
++            uint32_t fid = u16(ent + 4);
++            while (q < rom.size()) {
++                const uint8_t n = rom[q++];
++                if (!n) break;
++                std::string nom(reinterpret_cast<const char*>(&rom[q]), n & 0x7F); q += n & 0x7F;
++                if (n & 0x80) { const uint32_t sid = u16(q); q += 2; rec(sid, ruta + nom + "/", prof + 1); }
++                else rutas[fid++] = ruta + nom;
++            }
++        };
++        rec(0xF000, "/", 0);
++    }
++    int id = -1;
++    for (size_t i = 0; i < fat.size(); ++i)
++        if (src >= fat[i].first && src < fat[i].second) { id = int(i); break; }
++    if (id == ultimo) return;
++    ultimo = id;
++    const auto it = rutas.find(uint32_t(id));
++    // Quien lo pide: LR y direcciones de retorno probables en la pila (cadena de llamadas)
++    char pila[200]; int n = 0;
++    pila[0] = 0;
++    for (uint32_t k = 0, sp = g_cpu.R[13]; k < 64 && n < 6; ++k) {
++        const uint32_t v = bus_read_u32(sp + 4 * k);
++        if (v >= 0x02000000u && v < 0x02200000u && (v & 1u) == 0u && (v & 2u) == 0u) {
++            std::snprintf(pila + std::strlen(pila), sizeof(pila) - std::strlen(pila), " %08X", v);
++            ++n;
++        }
++    }
++    std::fprintf(stderr, "[archivo] %s (%u bytes desde +0x%X) lr=%08X pila:%s\n",
++                 id < 0 ? "(fuera de los archivos)" : (it != rutas.end() ? it->second.c_str() : "(overlay/sin nombre)"),
++                 len, id < 0 ? src : src - fat[size_t(id)].first, g_cpu.R[14], pila);
++}
++
++// Variable global del idioma del juego (la escribe 0x0209D648 al arrancar con lo
++// que devuelve 0x0209D61C). Si el HLE de esa funcion no llega a usarse (codigo ya
++// enlazado en los bancos), se corrige aqui, en cada lectura del cartucho.
++constexpr uint32_t kIdiomaGlobal = 0x020FC7D4u;
++int ie1_idioma_deseado() {
++    static int cod = -1;
++    if (cod < 0) {
++        const char* t = std::getenv("IE1_TEXTOS");
++        const std::string v = t ? t : "";
++        cod = v == "fr" ? 1 : (v == "de" || v == "ge") ? 2 : v == "it" ? 3 : v == "es" ? 4 : 0;
++    }
++    return cod;
++}
++void ie1_corregir_idioma() {
++    const int cod = ie1_idioma_deseado();
++    if (cod == 0) return;
++    if (bus_read_u32(kIdiomaGlobal) != uint32_t(cod)) {
++        static bool avisado = false;
++        bus_write_u32(kIdiomaGlobal, uint32_t(cod));
++        if (!avisado) { avisado = true; std::fprintf(stderr, "[idiomas] idioma del juego puesto a %d\n", cod); }
++    }
++}
++
+ void card_read() {
++    ie1_log_lectura(g_cpu.R[2], g_cpu.R[3]);  // diagnostico opcional
++    ie1_corregir_idioma();
+     ie1_aplicar_textos();  // IE1_TEXTOS
+     const uint32_t len = g_cpu.R[3];
+     uint32_t dst = g_cpu.R[1], src = g_cpu.R[2], left = len;
+diff --git a/runner/src/hle_ie1_card.h b/runner/src/hle_ie1_card.h
+index 9ada1e3..10c9f9d 100644
+--- a/runner/src/hle_ie1_card.h
++++ b/runner/src/hle_ie1_card.h
+@@ -22,5 +22,6 @@ void card_read();
+ void lz_uncompress();
+ void yuv_convert();
+ void chip_id();
++void idioma_juego();
+ void blz_uncompress();
+ } // namespace ie1_hle
+diff --git a/runner/src/ie1_idiomas.cpp b/runner/src/ie1_idiomas.cpp
+index ddf62b5..200a567 100644
+--- a/runner/src/ie1_idiomas.cpp
++++ b/runner/src/ie1_idiomas.cpp
+@@ -16,6 +16,7 @@
+ #endif
+ #include <windows.h>
+ #endif
++#include "runtime_arm.h"   // bus_read_* / bus_write_* para los trucos
+ 
+ namespace {
+ uint32_t rd32(const std::vector<uint8_t>& r, std::size_t o) {
+@@ -143,10 +144,27 @@ void relanzar() {
+     std::wstring cmd = GetCommandLineW();
+     STARTUPINFOW si{};
+     si.cb = sizeof(si);
++    // El proceso nuevo sigue escribiendo en el mismo registro (ultima_sesion.log)
++    // y, si este no tenia consola (lanzado desde el lanzador), tampoco abre una.
++    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE), err = GetStdHandle(STD_ERROR_HANDLE);
++    BOOL heredar = FALSE;
++    if (out && out != INVALID_HANDLE_VALUE && err && err != INVALID_HANDLE_VALUE) {
++        SetHandleInformation(out, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
++        SetHandleInformation(err, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
++        si.dwFlags = STARTF_USESTDHANDLES;
++        si.hStdOutput = out; si.hStdError = err; si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
++        heredar = TRUE;
++    }
++    const DWORD flags = GetConsoleWindow() ? 0 : CREATE_NO_WINDOW;
++    std::fflush(stdout); std::fflush(stderr);
+     PROCESS_INFORMATION pi{};
+-    if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
++    if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, heredar, flags, nullptr, nullptr, &si, &pi)) {
++        // aviso para el lanzador: este es el juego que sigue (lo espera en vez de reaparecer)
++        if (std::FILE* f = std::fopen("reinicio.pid", "w")) { std::fprintf(f, "%lu\n", (unsigned long)pi.dwProcessId); std::fclose(f); }
+         CloseHandle(pi.hThread);
+         CloseHandle(pi.hProcess);
++    } else {
++        std::fprintf(stderr, "[menu] no se pudo reiniciar (error %lu)\n", (unsigned long)GetLastError());
+     }
+ #endif
+ }
+@@ -278,6 +296,26 @@ char g_mods_nombres[kMaxMods][64];
+ int g_mods_activos[kMaxMods];
+ using FnGuardar = void (*)(const char (*)[64], const int*, int);
+ FnGuardar g_mods_guardar = nullptr;
++// Trucos (Action Replay) de los mods, una vez por fotograma
++struct Ie1ModsMem {
++    uint32_t version;   // 2: con copia rapida de memoria
++    uint32_t (*r32)(uint32_t); uint16_t (*r16)(uint32_t); uint8_t (*r8)(uint32_t);
++    void (*w32)(uint32_t, uint32_t); void (*w16)(uint32_t, uint16_t); void (*w8)(uint32_t, uint8_t);
++    int (*copiar)(uint32_t, uint8_t*, uint32_t);   // copia un bloque de memoria del ARM9
++};
++using FnFotograma = void (*)(const Ie1ModsMem*);
++FnFotograma g_mods_fotograma = nullptr;
++// Menu propio de los mods dibujado sobre las pantallas (entrenamiento libre)
++using FnInt = int (*)();
++using FnVoid = void (*)();
++using FnTeclas = void (*)(uint16_t);
++using FnDibujar = int (*)(const uint32_t*, int, const uint32_t*, int, const uint32_t**, const uint32_t**);
++FnInt g_ov_disponible = nullptr, g_ov_activo = nullptr;
++FnVoid g_ov_alternar = nullptr;
++FnTeclas g_ov_teclas = nullptr;
++FnDibujar g_ov_dibujar = nullptr;
++using FnToque = void (*)(int, int, int);
++FnToque g_ov_toque = nullptr;
+ void ie1_mods_cargar(std::vector<uint8_t>& rom) {
+ #if defined(_WIN32)
+     wchar_t exe[MAX_PATH];
+@@ -300,6 +338,17 @@ void ie1_mods_cargar(std::vector<uint8_t>& rom) {
+         g_mods_guardar = reinterpret_cast<FnGuardar>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_guardar_v1")));
+         g_mods_hay = true;
+     }
++    g_ov_disponible = reinterpret_cast<FnInt>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_disponible_v1")));
++    g_ov_activo = reinterpret_cast<FnInt>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_activo_v1")));
++    g_ov_alternar = reinterpret_cast<FnVoid>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_alternar_v1")));
++    g_ov_teclas = reinterpret_cast<FnTeclas>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_teclas_v1")));
++    g_ov_dibujar = reinterpret_cast<FnDibujar>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_dibujar_v1")));
++    g_ov_toque = reinterpret_cast<FnToque>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_toque_v1")));
++    if (!(g_ov_disponible && g_ov_activo && g_ov_alternar && g_ov_teclas && g_ov_dibujar))
++        g_ov_disponible = nullptr;
++    // Se llama cada fotograma aunque no haya trucos: tambien da al complemento
++    // el acceso a la memoria del juego que usa su menu (entrenamiento libre).
++    g_mods_fotograma = reinterpret_cast<FnFotograma>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_fotograma_v1")));
+ #else
+     (void)rom;
+ #endif
+@@ -312,6 +361,37 @@ void ie1_idiomas_componer(std::vector<uint8_t>& rom) {
+     ie1_mods_cargar(rom);
+ }
+ 
++// Trucos de los mods: el frontend lo llama una vez por fotograma (parche_trucos.py)
++extern "C" void ie1_mods_fotograma() {
++    if (!g_mods_fotograma) return;
++    static const Ie1ModsMem mem{2,
++        [](uint32_t a) -> uint32_t { return bus_read_u32(a); },
++        [](uint32_t a) -> uint16_t { return bus_read_u16(a); },
++        [](uint32_t a) -> uint8_t { return bus_read_u8(a); },
++        [](uint32_t a, uint32_t v) { bus_write_u32(a, v); },
++        [](uint32_t a, uint16_t v) { bus_write_u16(a, v); },
++        [](uint32_t a, uint8_t v) { bus_write_u8(a, v); },
++        [](uint32_t a, uint8_t* d, uint32_t n) -> int {   // copia por palabras (sin depender de otras APIs)
++            for (uint32_t i = 0; i + 4 <= n; i += 4) {
++                const uint32_t v = bus_read_u32(a + i);
++                std::memcpy(d + i, &v, 4);
++            }
++            return 1;
++        }};
++    g_mods_fotograma(&mem);
++}
++
++// Menu propio de los mods (parche_overlay.py)
++extern "C" int ie1_overlay_disponible() { return g_ov_disponible && g_ov_disponible() ? 1 : 0; }
++extern "C" int ie1_overlay_activo() { return g_ov_disponible && g_ov_activo() ? 1 : 0; }
++extern "C" void ie1_overlay_alternar() { if (ie1_overlay_disponible()) g_ov_alternar(); }
++extern "C" void ie1_overlay_teclas(uint16_t pulsados) { if (g_ov_disponible) g_ov_teclas(pulsados); }
++extern "C" void ie1_overlay_toque(int x, int y, int abajo) { if (g_ov_disponible && g_ov_toque) g_ov_toque(x, y, abajo); }
++extern "C" int ie1_overlay_dibujar(const uint32_t* a, int aw, const uint32_t* b, int bw,
++                                   const uint32_t** sa, const uint32_t** sb) {
++    return g_ov_disponible ? g_ov_dibujar(a, aw, b, bw, sa, sb) : 0;
++}
++
+ // API para el menu de Esc (parche_menu_mods.py)
+ extern "C" int ie1_mods_hay() { return g_mods_hay ? 1 : 0; }
+ extern "C" int ie1_mods_num() { return g_mods_n; }
+diff --git a/runner/src/runtime_arm.cpp b/runner/src/runtime_arm.cpp
+index 2ed34b6..728e882 100644
+--- a/runner/src/runtime_arm.cpp
++++ b/runner/src/runtime_arm.cpp
+@@ -26,6 +26,7 @@
+ #endif
+ 
+ #include <algorithm>
++#include <map>  // IE1_DIAG_ESCRITURAS
+ #include <array>
+ #include <cstddef>
+ #include <deque>
+@@ -429,6 +430,37 @@ const DispatchEntry* lookup_static(
+     return result.selected;
+ }
+ 
++// IE1_DIAG_ESCRITURAS: revalidaciones de codigo por pagina (parche_diag_escrituras.py)
++struct Ie1DiagPagina { uint64_t guarda = 0, busqueda = 0; uint32_t pc = 0; };
++struct Ie1Diag {
++    bool activo = false, iniciado = false;
++    uint64_t escrituras = 0;
++    std::map<uint32_t, Ie1DiagPagina> paginas;
++};
++Ie1Diag& ie1_diag() {
++    static Ie1Diag d;
++    if (!d.iniciado) {
++        d.iniciado = true;
++        const char* e = std::getenv("NDS_IE1_DIAG_ESCRITURAS");
++        d.activo = e && *e == '1';
++        if (d.activo) std::atexit([] {
++            Ie1Diag& d2 = ie1_diag();
++            std::vector<std::pair<uint32_t, Ie1DiagPagina>> v(d2.paginas.begin(), d2.paginas.end());
++            std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) {
++                return a.second.guarda + a.second.busqueda > b.second.guarda + b.second.busqueda; });
++            uint64_t tg = 0, tb = 0;
++            for (const auto& p : v) { tg += p.second.guarda; tb += p.second.busqueda; }
++            std::fprintf(stderr, "[escrituras] escrituras del juego en RAM: %llu; revalidaciones: %llu (codigo en ejecucion) + %llu (busquedas)\n",
++                         (unsigned long long)d2.escrituras, (unsigned long long)tg, (unsigned long long)tb);
++            for (size_t i = 0; i < v.size() && i < 25; ++i)
++                std::fprintf(stderr, "[escrituras] pagina %08X: %llu en ejecucion + %llu en busquedas (pc ejemplo %08X)\n",
++                             v[i].first, (unsigned long long)v[i].second.guarda,
++                             (unsigned long long)v[i].second.busqueda, v[i].second.pc);
++        });
++    }
++    return d;
++}
++
+ bool cached_lookup_live(const CachedStaticLookup& cached) {
+     // page_count is populated exactly when the cached candidate has a
+     // writable-RAM validation. Keep the common immutable-bank hit entirely
+@@ -438,8 +470,11 @@ bool cached_lookup_live(const CachedStaticLookup& cached) {
+         const uint32_t live_generation = cached.generation_ptr[i]
+             ? *cached.generation_ptr[i]
+             : bus_exec_page_generation(cached.page_addr[i]);
+-        if (live_generation != cached.generation[i])
++        if (live_generation != cached.generation[i]) {
++            Ie1Diag& d = ie1_diag();  // IE1_DIAG_ESCRITURAS
++            if (d.activo) { auto& p = d.paginas[cached.page_addr[i] & ~0xFFFu]; ++p.busqueda; p.pc = g_cpu.R[15]; }
+             return false;
++        }
+     }
+     return true;
+ }
+@@ -737,6 +772,15 @@ bool guard_generation_changed(const StaticExecutionGuard& guard) {
+ 
+ bool refresh_guard_after_generation_change(StaticExecutionGuard& guard) {
+     if (!guard.validation) return true;
++    {   // IE1_DIAG_ESCRITURAS
++        Ie1Diag& d = ie1_diag();
++        if (d.activo)
++            for (uint32_t i = 0; i < guard.page_count; ++i) {
++                const uint32_t g = guard.generation_ptr[i] ? *guard.generation_ptr[i]
++                                                           : bus_exec_page_generation(guard.page_addr[i]);
++                if (g != guard.generation[i]) { auto& p = d.paginas[guard.page_addr[i] & ~0xFFFu]; ++p.guarda; p.pc = g_cpu.R[15]; }
++            }
++    }
+     if (!validation_identity_live(guard.validation)) return false;
+     for (uint32_t i = 0; i < guard.page_count; ++i) {
+         guard.generation[i] = guard.generation_ptr[i]
+@@ -1027,6 +1071,7 @@ extern "C" void runtime_note_code_write(void) {
+     // what lets the coverage page cache stay trusted between writes instead of
+     // paying a generation lookup per interpreted instruction.
+     ++g_coverage_write_epoch;
++    { Ie1Diag& d = ie1_diag(); if (d.activo) ++d.escrituras; }  // IE1_DIAG_ESCRITURAS
+     if (g_static_guard && !g_static_guard->invalidated &&
+         guard_generation_changed(*g_static_guard)) {
+         if (!refresh_guard_after_generation_change(*g_static_guard)) {
+diff --git a/runner/src/wifi_net.cpp b/runner/src/wifi_net.cpp
+index 206aff3..2439640 100644
+--- a/runner/src/wifi_net.cpp
++++ b/runner/src/wifi_net.cpp
+@@ -748,6 +748,43 @@ public:
+         enabled_ = enabled && instance < kMaxInstances;
+         instance_ = instance;
+         base_port_ = base_port;
++        CargarPares();   // IE1_WIFI_RED
++    }
++
++    // IE1_WIFI_RED: rivales en otros PC (IE1_WIFI_PEERS="ip:puerto,ip:puerto").
++    void CargarPares() {
++#ifdef _WIN32
++        peers_.clear();
++        const char* e = std::getenv("IE1_WIFI_PEERS");
++        if (!e || !*e) return;
++        std::string lista = e;
++        size_t pos = 0;
++        while (pos <= lista.size()) {
++            size_t coma = lista.find(',', pos);
++            if (coma == std::string::npos) coma = lista.size();
++            std::string item = lista.substr(pos, coma - pos);
++            pos = coma + 1;
++            while (!item.empty() && item.front() == ' ') item.erase(item.begin());
++            while (!item.empty() && item.back() == ' ') item.pop_back();
++            if (item.empty()) continue;
++            const size_t dos = item.rfind(':');
++            const std::string ip = dos == std::string::npos ? item : item.substr(0, dos);
++            const unsigned puerto = dos == std::string::npos
++                ? unsigned(base_port_) : unsigned(std::strtoul(item.c_str() + dos + 1, nullptr, 10));
++            sockaddr_in a{};
++            a.sin_family = AF_INET;
++            a.sin_addr.s_addr = inet_addr(ip.c_str());
++            a.sin_port = htons(static_cast<uint16_t>(puerto));
++            if (a.sin_addr.s_addr == INADDR_NONE || puerto == 0 || puerto > 65535) {
++                melonDS::Platform::Log(melonDS::Platform::Warn,
++                    "[local_mp] red: direccion no valida '%s'\n", item.c_str());
++                continue;
++            }
++            peers_.push_back(a);
++            melonDS::Platform::Log(melonDS::Platform::Info,
++                "[local_mp] red: rival %s:%u\n", ip.c_str(), puerto);
++        }
++#endif
+     }
+ 
+     void Begin() {
+@@ -770,8 +807,13 @@ public:
+ 
+         sockaddr_in addr{};
+         addr.sin_family = AF_INET;
+-        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++        // IE1_WIFI_RED: con rivales en otros PC se escucha en todas las interfaces
++        addr.sin_addr.s_addr = peers_.empty() ? htonl(INADDR_LOOPBACK) : htonl(INADDR_ANY);
+         addr.sin_port = htons(static_cast<uint16_t>(base_port_ + instance_));
++        if (!peers_.empty())
++            melonDS::Platform::Log(melonDS::Platform::Info,
++                "[local_mp] red: escuchando en todas las interfaces, puerto %u\n",
++                static_cast<unsigned>(base_port_ + instance_));
+         if (::bind(socket_, reinterpret_cast<sockaddr*>(&addr),
+                    sizeof(addr)) == SOCKET_ERROR) {
+             melonDS::Platform::Log(melonDS::Platform::Error,
+@@ -1022,6 +1064,23 @@ private:
+             datagram.insert(datagram.end(), data, data + len);
+ 
+         int sent = 0;
++        if (!peers_.empty()) {   // IE1_WIFI_RED: rivales en otros PC
++            for (const sockaddr_in& target : peers_) {
++                if (::sendto(socket_,
++                             reinterpret_cast<const char*>(datagram.data()),
++                             static_cast<int>(datagram.size()), 0,
++                             reinterpret_cast<const sockaddr*>(&target),
++                             sizeof(target)) != SOCKET_ERROR) {
++                    sent = len;
++                    stats_frames_sent_.fetch_add(1, std::memory_order_relaxed);
++                } else if (send_error_log_counter_ < 8u) {
++                    ++send_error_log_counter_;
++                    melonDS::Platform::Log(melonDS::Platform::Warn,
++                        "[local_mp] red: sendto fallo: %d\n", WSAGetLastError());
++                }
++            }
++            return sent;
++        }
+         for (uint32_t i = 0; i < kMaxInstances; ++i) {
+             if (i == instance_) continue;
+             sockaddr_in target{};
+@@ -1120,6 +1179,9 @@ private:
+     bool enabled_ = false;
+     uint32_t instance_ = 0;
+     uint16_t base_port_ = 26710;
++#ifdef _WIN32
++    std::vector<sockaddr_in> peers_;   // IE1_WIFI_RED
++#endif
+     LocalMpFrameQueue packet_queue_{kQueueCapacity};
+     LocalMpFrameQueue reply_queue_{kQueueCapacity};
+     int last_host_id_ = -1;

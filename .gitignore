@@ -1,0 +1,36 @@
+# Nintendo / game data - never commit
+*.nds
+*.sav
+*.nss
+*.dsv
+*.bin
+*.pkb
+*.pkh
+*.pac_
+*.SAD
+*.NFTR
+images/
+generated/
+generated_perf/
+idiomas/
+run/
+datos/
+estados/
+rom/
+# generated mod content (built from each user's ROMs)
+mods/npc_entrenador/
+mods/voces_jp/
+mods/niveles_supertecnicas/pk/
+mods/niveles_supertecnicas/idioma/
+mods/marca_prueba/
+# build output
+build*/
+*.exe
+*.dll
+*.obj
+*.o
+*.zip
+__pycache__/
+*.log
+*.jsonl
+*.ndshp

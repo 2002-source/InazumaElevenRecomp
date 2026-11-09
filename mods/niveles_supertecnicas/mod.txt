@@ -1,0 +1,6 @@
+nombre=Niveles de supertecnicas
+descripcion=Las supertecnicas suben de nivel con el uso, como en el Inazuma Eleven 2: ganan poder, sale el aviso Nv + al subir y su marca (+, ++, G2...) junto al nombre.
+nombre_en=Move levels
+descripcion_en=Special moves level up with use, like in Inazuma Eleven 2: they gain power, a Lv + notice appears when they level up and their mark (+, ++, L2...) is shown next to the name.
+desbloqueo=Siempre activo: usa las supertecnicas en los partidos (segun el tipo, suben entre 6 y 100 usos).
+desbloqueo_en=Always on: use your special moves in matches (depending on the type, they level up after 6 to 100 uses).

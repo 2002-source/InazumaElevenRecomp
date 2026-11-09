@@ -1,0 +1,987 @@
+# Semillas ARM7 obtenidas de la cobertura (semillas_cobertura.py)
+
+[[entry_point]]
+addr = 0x037F8448
+mode = "arm"
+name = "cov_037F8448"
+
+[[entry_point]]
+addr = 0x037F8510
+mode = "arm"
+name = "cov_037F8510"
+
+[[entry_point]]
+addr = 0x037F85DC
+mode = "arm"
+name = "cov_037F85DC"
+
+[[entry_point]]
+addr = 0x037F8654
+mode = "arm"
+name = "cov_037F8654"
+
+[[entry_point]]
+addr = 0x037F873C
+mode = "arm"
+name = "cov_037F873C"
+
+[[entry_point]]
+addr = 0x037F8890
+mode = "arm"
+name = "cov_037F8890"
+
+[[entry_point]]
+addr = 0x037F8910
+mode = "arm"
+name = "cov_037F8910"
+
+[[entry_point]]
+addr = 0x037F8A08
+mode = "arm"
+name = "cov_037F8A08"
+
+[[entry_point]]
+addr = 0x037F8A10
+mode = "arm"
+name = "cov_037F8A10"
+
+[[entry_point]]
+addr = 0x037F8C38
+mode = "arm"
+name = "cov_037F8C38"
+
+[[entry_point]]
+addr = 0x037F8C88
+mode = "arm"
+name = "cov_037F8C88"
+
+[[entry_point]]
+addr = 0x037F8CD0
+mode = "arm"
+name = "cov_037F8CD0"
+
+[[entry_point]]
+addr = 0x037F8D54
+mode = "arm"
+name = "cov_037F8D54"
+
+[[entry_point]]
+addr = 0x037F8E8C
+mode = "arm"
+name = "cov_037F8E8C"
+
+[[entry_point]]
+addr = 0x037F9010
+mode = "arm"
+name = "cov_037F9010"
+
+[[entry_point]]
+addr = 0x037F9098
+mode = "arm"
+name = "cov_037F9098"
+
+[[entry_point]]
+addr = 0x037F9134
+mode = "arm"
+name = "cov_037F9134"
+
+[[entry_point]]
+addr = 0x037F9338
+mode = "arm"
+name = "cov_037F9338"
+
+[[entry_point]]
+addr = 0x037F95D8
+mode = "arm"
+name = "cov_037F95D8"
+
+[[entry_point]]
+addr = 0x037F98FC
+mode = "arm"
+name = "cov_037F98FC"
+
+[[entry_point]]
+addr = 0x037F9B50
+mode = "arm"
+name = "cov_037F9B50"
+
+[[entry_point]]
+addr = 0x037FA028
+mode = "arm"
+name = "cov_037FA028"
+
+[[entry_point]]
+addr = 0x037FA4A4
+mode = "arm"
+name = "cov_037FA4A4"
+
+[[entry_point]]
+addr = 0x037FA5D0
+mode = "arm"
+name = "cov_037FA5D0"
+
+[[entry_point]]
+addr = 0x037FA5F8
+mode = "arm"
+name = "cov_037FA5F8"
+
+[[entry_point]]
+addr = 0x037FA658
+mode = "arm"
+name = "cov_037FA658"
+
+[[entry_point]]
+addr = 0x037FA698
+mode = "arm"
+name = "cov_037FA698"
+
+[[entry_point]]
+addr = 0x037FA6A4
+mode = "arm"
+name = "cov_037FA6A4"
+
+[[entry_point]]
+addr = 0x037FA850
+mode = "arm"
+name = "cov_037FA850"
+
+[[entry_point]]
+addr = 0x037FA868
+mode = "arm"
+name = "cov_037FA868"
+
+[[entry_point]]
+addr = 0x037FA8E8
+mode = "arm"
+name = "cov_037FA8E8"
+
+[[entry_point]]
+addr = 0x037FAA14
+mode = "arm"
+name = "cov_037FAA14"
+
+[[entry_point]]
+addr = 0x037FAA5C
+mode = "arm"
+name = "cov_037FAA5C"
+
+[[entry_point]]
+addr = 0x037FAB74
+mode = "arm"
+name = "cov_037FAB74"
+
+[[entry_point]]
+addr = 0x037FAC30
+mode = "arm"
+name = "cov_037FAC30"
+
+[[entry_point]]
+addr = 0x037FAC3C
+mode = "arm"
+name = "cov_037FAC3C"
+
+[[entry_point]]
+addr = 0x037FACF8
+mode = "arm"
+name = "cov_037FACF8"
+
+[[entry_point]]
+addr = 0x037FAD34
+mode = "arm"
+name = "cov_037FAD34"
+
+[[entry_point]]
+addr = 0x037FAD68
+mode = "arm"
+name = "cov_037FAD68"
+
+[[entry_point]]
+addr = 0x037FAE54
+mode = "arm"
+name = "cov_037FAE54"
+
+[[entry_point]]
+addr = 0x037FB034
+mode = "arm"
+name = "cov_037FB034"
+
+[[entry_point]]
+addr = 0x037FB098
+mode = "arm"
+name = "cov_037FB098"
+
+[[entry_point]]
+addr = 0x037FB148
+mode = "arm"
+name = "cov_037FB148"
+
+[[entry_point]]
+addr = 0x037FBACC
+mode = "arm"
+name = "cov_037FBACC"
+
+[[entry_point]]
+addr = 0x037FBB14
+mode = "arm"
+name = "cov_037FBB14"
+
+[[entry_point]]
+addr = 0x037FBC04
+mode = "arm"
+name = "cov_037FBC04"
+
+[[entry_point]]
+addr = 0x037FBF18
+mode = "arm"
+name = "cov_037FBF18"
+
+[[entry_point]]
+addr = 0x037FC0F0
+mode = "arm"
+name = "cov_037FC0F0"
+
+[[entry_point]]
+addr = 0x037FC9D0
+mode = "arm"
+name = "cov_037FC9D0"
+
+[[entry_point]]
+addr = 0x037FCA74
+mode = "arm"
+name = "cov_037FCA74"
+
+[[entry_point]]
+addr = 0x037FCCBC
+mode = "arm"
+name = "cov_037FCCBC"
+
+[[entry_point]]
+addr = 0x037FCDF0
+mode = "arm"
+name = "cov_037FCDF0"
+
+[[entry_point]]
+addr = 0x037FCE44
+mode = "arm"
+name = "cov_037FCE44"
+
+[[entry_point]]
+addr = 0x037FCE98
+mode = "arm"
+name = "cov_037FCE98"
+
+[[entry_point]]
+addr = 0x037FCF18
+mode = "arm"
+name = "cov_037FCF18"
+
+[[entry_point]]
+addr = 0x037FCF34
+mode = "arm"
+name = "cov_037FCF34"
+
+[[entry_point]]
+addr = 0x037FCFFC
+mode = "arm"
+name = "cov_037FCFFC"
+
+[[entry_point]]
+addr = 0x037FD018
+mode = "arm"
+name = "cov_037FD018"
+
+[[entry_point]]
+addr = 0x037FD03C
+mode = "arm"
+name = "cov_037FD03C"
+
+[[entry_point]]
+addr = 0x037FD250
+mode = "arm"
+name = "cov_037FD250"
+
+[[entry_point]]
+addr = 0x037FD40C
+mode = "arm"
+name = "cov_037FD40C"
+
+[[entry_point]]
+addr = 0x037FD9F8
+mode = "arm"
+name = "cov_037FD9F8"
+
+[[entry_point]]
+addr = 0x037FDE84
+mode = "arm"
+name = "cov_037FDE84"
+
+[[entry_point]]
+addr = 0x037FDE94
+mode = "arm"
+name = "cov_037FDE94"
+
+[[entry_point]]
+addr = 0x037FDF2C
+mode = "arm"
+name = "cov_037FDF2C"
+
+[[entry_point]]
+addr = 0x037FE0B8
+mode = "arm"
+name = "cov_037FE0B8"
+
+[[entry_point]]
+addr = 0x037FE450
+mode = "arm"
+name = "cov_037FE450"
+
+[[entry_point]]
+addr = 0x037FEA50
+mode = "arm"
+name = "cov_037FEA50"
+
+[[entry_point]]
+addr = 0x037FED1C
+mode = "arm"
+name = "cov_037FED1C"
+
+[[entry_point]]
+addr = 0x037FED4C
+mode = "arm"
+name = "cov_037FED4C"
+
+[[entry_point]]
+addr = 0x037FEDC8
+mode = "arm"
+name = "cov_037FEDC8"
+
+[[entry_point]]
+addr = 0x037FEEF0
+mode = "arm"
+name = "cov_037FEEF0"
+
+[[entry_point]]
+addr = 0x037FEF00
+mode = "arm"
+name = "cov_037FEF00"
+
+[[entry_point]]
+addr = 0x037FEF38
+mode = "arm"
+name = "cov_037FEF38"
+
+[[entry_point]]
+addr = 0x037FF17C
+mode = "arm"
+name = "cov_037FF17C"
+
+[[entry_point]]
+addr = 0x037FF1F4
+mode = "arm"
+name = "cov_037FF1F4"
+
+[[entry_point]]
+addr = 0x037FF20C
+mode = "arm"
+name = "cov_037FF20C"
+
+[[entry_point]]
+addr = 0x037FF284
+mode = "arm"
+name = "cov_037FF284"
+
+[[entry_point]]
+addr = 0x037FF5DC
+mode = "arm"
+name = "cov_037FF5DC"
+
+[[entry_point]]
+addr = 0x037FF6F8
+mode = "arm"
+name = "cov_037FF6F8"
+
+[[entry_point]]
+addr = 0x037FF7B8
+mode = "arm"
+name = "cov_037FF7B8"
+
+[[entry_point]]
+addr = 0x037FF7C8
+mode = "arm"
+name = "cov_037FF7C8"
+
+[[entry_point]]
+addr = 0x037FF7CC
+mode = "arm"
+name = "cov_037FF7CC"
+
+[[entry_point]]
+addr = 0x037FF7D4
+mode = "arm"
+name = "cov_037FF7D4"
+
+[[entry_point]]
+addr = 0x037FF7DC
+mode = "arm"
+name = "cov_037FF7DC"
+
+[[entry_point]]
+addr = 0x037FF7E0
+mode = "arm"
+name = "cov_037FF7E0"
+
+[[entry_point]]
+addr = 0x037FF7E4
+mode = "arm"
+name = "cov_037FF7E4"
+
+[[entry_point]]
+addr = 0x037FF848
+mode = "arm"
+name = "cov_037FF848"
+
+[[entry_point]]
+addr = 0x037FF860
+mode = "arm"
+name = "cov_037FF860"
+
+[[entry_point]]
+addr = 0x037FF8B4
+mode = "arm"
+name = "cov_037FF8B4"
+
+[[entry_point]]
+addr = 0x037FFAA0
+mode = "arm"
+name = "cov_037FFAA0"
+
+[[entry_point]]
+addr = 0x038001D4
+mode = "arm"
+name = "cov_038001D4"
+
+[[entry_point]]
+addr = 0x03800298
+mode = "arm"
+name = "cov_03800298"
+
+[[entry_point]]
+addr = 0x038005A4
+mode = "arm"
+name = "cov_038005A4"
+
+[[entry_point]]
+addr = 0x03800608
+mode = "arm"
+name = "cov_03800608"
+
+[[entry_point]]
+addr = 0x038021C4
+mode = "arm"
+name = "cov_038021C4"
+
+[[entry_point]]
+addr = 0x038021F0
+mode = "arm"
+name = "cov_038021F0"
+
+[[entry_point]]
+addr = 0x03802214
+mode = "arm"
+name = "cov_03802214"
+
+[[entry_point]]
+addr = 0x03802224
+mode = "arm"
+name = "cov_03802224"
+
+[[entry_point]]
+addr = 0x0380224C
+mode = "arm"
+name = "cov_0380224C"
+
+[[entry_point]]
+addr = 0x03802278
+mode = "arm"
+name = "cov_03802278"
+
+[[entry_point]]
+addr = 0x038022DC
+mode = "arm"
+name = "cov_038022DC"
+
+[[entry_point]]
+addr = 0x03802390
+mode = "arm"
+name = "cov_03802390"
+
+[[entry_point]]
+addr = 0x038023D0
+mode = "arm"
+name = "cov_038023D0"
+
+[[entry_point]]
+addr = 0x03802494
+mode = "arm"
+name = "cov_03802494"
+
+[[entry_point]]
+addr = 0x03802624
+mode = "arm"
+name = "cov_03802624"
+
+[[entry_point]]
+addr = 0x038026E4
+mode = "arm"
+name = "cov_038026E4"
+
+[[entry_point]]
+addr = 0x03802784
+mode = "arm"
+name = "cov_03802784"
+
+[[entry_point]]
+addr = 0x038027D0
+mode = "arm"
+name = "cov_038027D0"
+
+[[entry_point]]
+addr = 0x038027F8
+mode = "arm"
+name = "cov_038027F8"
+
+[[entry_point]]
+addr = 0x03802838
+mode = "arm"
+name = "cov_03802838"
+
+[[entry_point]]
+addr = 0x03802864
+mode = "arm"
+name = "cov_03802864"
+
+[[entry_point]]
+addr = 0x03802880
+mode = "arm"
+name = "cov_03802880"
+
+[[entry_point]]
+addr = 0x038028A4
+mode = "arm"
+name = "cov_038028A4"
+
+[[entry_point]]
+addr = 0x038028C0
+mode = "arm"
+name = "cov_038028C0"
+
+[[entry_point]]
+addr = 0x0380293C
+mode = "arm"
+name = "cov_0380293C"
+
+[[entry_point]]
+addr = 0x038029E4
+mode = "arm"
+name = "cov_038029E4"
+
+[[entry_point]]
+addr = 0x03802A44
+mode = "arm"
+name = "cov_03802A44"
+
+[[entry_point]]
+addr = 0x03802AD8
+mode = "arm"
+name = "cov_03802AD8"
+
+[[entry_point]]
+addr = 0x03802B00
+mode = "arm"
+name = "cov_03802B00"
+
+[[entry_point]]
+addr = 0x03802D28
+mode = "arm"
+name = "cov_03802D28"
+
+[[entry_point]]
+addr = 0x03802DEC
+mode = "arm"
+name = "cov_03802DEC"
+
+[[entry_point]]
+addr = 0x03802E08
+mode = "arm"
+name = "cov_03802E08"
+
+[[entry_point]]
+addr = 0x03802E20
+mode = "arm"
+name = "cov_03802E20"
+
+[[entry_point]]
+addr = 0x03802E5C
+mode = "arm"
+name = "cov_03802E5C"
+
+[[entry_point]]
+addr = 0x03802F6C
+mode = "arm"
+name = "cov_03802F6C"
+
+[[entry_point]]
+addr = 0x03802F90
+mode = "arm"
+name = "cov_03802F90"
+
+[[entry_point]]
+addr = 0x03802FA0
+mode = "arm"
+name = "cov_03802FA0"
+
+[[entry_point]]
+addr = 0x03802FB4
+mode = "arm"
+name = "cov_03802FB4"
+
+[[entry_point]]
+addr = 0x03802FE4
+mode = "arm"
+name = "cov_03802FE4"
+
+[[entry_point]]
+addr = 0x03803350
+mode = "arm"
+name = "cov_03803350"
+
+[[entry_point]]
+addr = 0x038033A8
+mode = "arm"
+name = "cov_038033A8"
+
+[[entry_point]]
+addr = 0x038033CC
+mode = "arm"
+name = "cov_038033CC"
+
+[[entry_point]]
+addr = 0x03803468
+mode = "arm"
+name = "cov_03803468"
+
+[[entry_point]]
+addr = 0x0380364C
+mode = "arm"
+name = "cov_0380364C"
+
+[[entry_point]]
+addr = 0x038038EC
+mode = "arm"
+name = "cov_038038EC"
+
+[[entry_point]]
+addr = 0x03803A10
+mode = "arm"
+name = "cov_03803A10"
+
+[[entry_point]]
+addr = 0x038046E4
+mode = "arm"
+name = "cov_038046E4"
+
+[[entry_point]]
+addr = 0x03804784
+mode = "arm"
+name = "cov_03804784"
+
+[[entry_point]]
+addr = 0x03804884
+mode = "arm"
+name = "cov_03804884"
+
+[[entry_point]]
+addr = 0x03804B8C
+mode = "arm"
+name = "cov_03804B8C"
+
+[[entry_point]]
+addr = 0x03804C70
+mode = "arm"
+name = "cov_03804C70"
+
+[[entry_point]]
+addr = 0x03804C94
+mode = "arm"
+name = "cov_03804C94"
+
+[[entry_point]]
+addr = 0x03804E78
+mode = "arm"
+name = "cov_03804E78"
+
+[[entry_point]]
+addr = 0x03805D3C
+mode = "arm"
+name = "cov_03805D3C"
+
+[[entry_point]]
+addr = 0x03805D60
+mode = "arm"
+name = "cov_03805D60"
+
+[[entry_point]]
+addr = 0x03805DFC
+mode = "arm"
+name = "cov_03805DFC"
+
+[[entry_point]]
+addr = 0x03805E14
+mode = "arm"
+name = "cov_03805E14"
+
+[[entry_point]]
+addr = 0x03805E34
+mode = "arm"
+name = "cov_03805E34"
+
+[[entry_point]]
+addr = 0x03805EC4
+mode = "arm"
+name = "cov_03805EC4"
+
+[[entry_point]]
+addr = 0x03805EDC
+mode = "arm"
+name = "cov_03805EDC"
+
+[[entry_point]]
+addr = 0x03805EEC
+mode = "arm"
+name = "cov_03805EEC"
+
+[[entry_point]]
+addr = 0x03805F44
+mode = "arm"
+name = "cov_03805F44"
+
+[[entry_point]]
+addr = 0x03805F64
+mode = "arm"
+name = "cov_03805F64"
+
+[[entry_point]]
+addr = 0x03805F90
+mode = "arm"
+name = "cov_03805F90"
+
+[[entry_point]]
+addr = 0x03805FBC
+mode = "arm"
+name = "cov_03805FBC"
+
+[[entry_point]]
+addr = 0x03805FD0
+mode = "arm"
+name = "cov_03805FD0"
+
+[[entry_point]]
+addr = 0x03805FEC
+mode = "arm"
+name = "cov_03805FEC"
+
+[[entry_point]]
+addr = 0x03806000
+mode = "arm"
+name = "cov_03806000"
+
+[[entry_point]]
+addr = 0x0380602C
+mode = "arm"
+name = "cov_0380602C"
+
+[[entry_point]]
+addr = 0x03806100
+mode = "arm"
+name = "cov_03806100"
+
+[[entry_point]]
+addr = 0x03806190
+mode = "arm"
+name = "cov_03806190"
+
+[[entry_point]]
+addr = 0x038061D0
+mode = "arm"
+name = "cov_038061D0"
+
+[[entry_point]]
+addr = 0x03806218
+mode = "arm"
+name = "cov_03806218"
+
+[[entry_point]]
+addr = 0x0380627C
+mode = "arm"
+name = "cov_0380627C"
+
+[[entry_point]]
+addr = 0x0380629C
+mode = "arm"
+name = "cov_0380629C"
+
+[[entry_point]]
+addr = 0x038062B0
+mode = "arm"
+name = "cov_038062B0"
+
+[[entry_point]]
+addr = 0x03806334
+mode = "arm"
+name = "cov_03806334"
+
+[[entry_point]]
+addr = 0x03806344
+mode = "arm"
+name = "cov_03806344"
+
+[[entry_point]]
+addr = 0x0380639C
+mode = "arm"
+name = "cov_0380639C"
+
+[[entry_point]]
+addr = 0x038063F4
+mode = "arm"
+name = "cov_038063F4"
+
+[[entry_point]]
+addr = 0x03806408
+mode = "arm"
+name = "cov_03806408"
+
+[[entry_point]]
+addr = 0x0380641C
+mode = "arm"
+name = "cov_0380641C"
+
+[[entry_point]]
+addr = 0x03806450
+mode = "arm"
+name = "cov_03806450"
+
+[[entry_point]]
+addr = 0x0380646C
+mode = "arm"
+name = "cov_0380646C"
+
+[[entry_point]]
+addr = 0x03806480
+mode = "arm"
+name = "cov_03806480"
+
+[[entry_point]]
+addr = 0x0380648C
+mode = "arm"
+name = "cov_0380648C"
+
+[[entry_point]]
+addr = 0x03806578
+mode = "arm"
+name = "cov_03806578"
+
+[[entry_point]]
+addr = 0x0380658C
+mode = "arm"
+name = "cov_0380658C"
+
+[[entry_point]]
+addr = 0x038065D8
+mode = "arm"
+name = "cov_038065D8"
+
+[[entry_point]]
+addr = 0x0380692C
+mode = "arm"
+name = "cov_0380692C"
+
+[[entry_point]]
+addr = 0x03806968
+mode = "arm"
+name = "cov_03806968"
+
+[[entry_point]]
+addr = 0x038069AC
+mode = "arm"
+name = "cov_038069AC"
+
+[[entry_point]]
+addr = 0x038069C8
+mode = "arm"
+name = "cov_038069C8"
+
+[[entry_point]]
+addr = 0x038069DC
+mode = "arm"
+name = "cov_038069DC"
+
+[[entry_point]]
+addr = 0x038069F8
+mode = "arm"
+name = "cov_038069F8"
+
+[[entry_point]]
+addr = 0x03806A0C
+mode = "arm"
+name = "cov_03806A0C"
+
+[[entry_point]]
+addr = 0x03806A10
+mode = "arm"
+name = "cov_03806A10"
+
+[[entry_point]]
+addr = 0x03806A24
+mode = "arm"
+name = "cov_03806A24"
+
+[[entry_point]]
+addr = 0x03806A88
+mode = "arm"
+name = "cov_03806A88"
+
+[[entry_point]]
+addr = 0x03806AA4
+mode = "arm"
+name = "cov_03806AA4"
+
+[[entry_point]]
+addr = 0x03806AD0
+mode = "arm"
+name = "cov_03806AD0"
+
+[[entry_point]]
+addr = 0x03806B34
+mode = "arm"
+name = "cov_03806B34"
+
+[[entry_point]]
+addr = 0x03806B4C
+mode = "arm"
+name = "cov_03806B4C"
+
+[[entry_point]]
+addr = 0x038073D4
+mode = "arm"
+name = "cov_038073D4"
+
+[[entry_point]]
+addr = 0x038079F4
+mode = "arm"
+name = "cov_038079F4"
+
+[[entry_point]]
+addr = 0x03807A40
+mode = "arm"
+name = "cov_03807A40"
+

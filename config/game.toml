@@ -1,0 +1,9 @@
+[game]
+sha1 = "d55169c0b93d26b4037379d3b81a61b5404945e5"
+
+[display]
+screen_layout = "stacked"
+
+[cartridge]
+save_type = "eeprom"
+save_size = 65536

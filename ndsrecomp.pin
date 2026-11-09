@@ -1,0 +1,4 @@
+# ndsrecomp version this port is built and tested with.
+repository = https://github.com/RetroPortingToolKit/ndsrecomp
+version    = 0.6.10
+commit     = 79efa88ad78ee46dd334b9fa21d1cea11b8ae388
