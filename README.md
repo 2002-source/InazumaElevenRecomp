@@ -1,5 +1,12 @@
 # Inazuma Eleven PC Port (InazumaElevenRecomp)
 
+<p align="center">
+  <img src="docs/img/Supertecnica.png" width="49%" alt="Special move">
+  <img src="docs/img/Gol.png" width="49%" alt="Match">
+  <img src="docs/img/Mapa.png" width="49%" alt="Overworld">
+  <img src="docs/img/Lanzador.png" width="49%" alt="Launcher">
+</p>
+
 > **Alpha - bugs are expected.** A native PC port of **Inazuma Eleven**
 > (Nintendo DS, European release) made by static recompilation with
 > [ndsrecomp](https://github.com/RetroPortingToolKit/ndsrecomp). It is a fan
@@ -47,6 +54,8 @@ Optional ROMs (the preparer detects them):
   internet with a virtual LAN such as Radmin VPN or ZeroTier).
 - Language packs built from your own ROMs (Spanish text, voices and in-code
   text; Japanese voices).
+
+<p align="center"><img src="docs/img/Pachanga.png" width="60%" alt="Random battle"></p>
 
 ## Mods included
 
