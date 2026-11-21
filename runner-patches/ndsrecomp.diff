@@ -96,7 +96,7 @@ index 572c82e..14f9d91 100644
      }();
      return options;
 diff --git a/runner/src/frontend.cpp b/runner/src/frontend.cpp
-index 0e4388d..973b413 100644
+index 0e4388d..25362f3 100644
 --- a/runner/src/frontend.cpp
 +++ b/runner/src/frontend.cpp
 @@ -1,3 +1,5 @@
@@ -681,7 +681,7 @@ index 0e4388d..973b413 100644
 -        presentation.separate ? "ndsrecomp - Top Screen"
 -                               : "ndsrecomp firmware preview",
 +        presentation.separate ? "Inazuma Eleven Recomp - Top Screen"
-+                               : "Inazuma Eleven Recomp - v1.1",  // IE1_TITULO
++                               : "Inazuma Eleven Recomp - v1.1.1",  // IE1_TITULO
          SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
          (presentation.separate ? presentation.screen_widths[0]
                                 : presentation.canvas_width) * kWindowScale,
@@ -902,15 +902,15 @@ index 0e4388d..973b413 100644
 -                ? "ndsrecomp - Top Screen - " + fps_text + governor_text
 -                : "ndsrecomp firmware preview - " + fps_text +
 -                      governor_text;
-+                ? "Inazuma Eleven Recomp - Top Screen - " + fps_text + " - v1.1"
-+                : "Inazuma Eleven Recomp - " + fps_text + " - v1.1";
++                ? "Inazuma Eleven Recomp - Top Screen - " + fps_text + " - v1.1.1"
++                : "Inazuma Eleven Recomp - " + fps_text + " - v1.1.1";
              SDL_SetWindowTitle(presentation.windows[0],
                                 top_title.c_str());
              if (presentation.separate) {
                  const std::string bottom_title =
 -                    "ndsrecomp - Bottom Screen - " + fps_text +
 -                    governor_text;
-+                    "Inazuma Eleven Recomp - Bottom Screen - " + fps_text + " - v1.1";  // IE1_TITULO
++                    "Inazuma Eleven Recomp - Bottom Screen - " + fps_text + " - v1.1.1";  // IE1_TITULO
                  SDL_SetWindowTitle(presentation.windows[1],
                                     bottom_title.c_str());
              }

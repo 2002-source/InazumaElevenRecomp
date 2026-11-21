@@ -29,6 +29,25 @@ distributed in this repository.
 Full player instructions are in the release, in five languages (`README.txt`,
 `LEEME.txt`, `LISEZMOI.txt`, `LIESMICH.txt`, `LEGGIMI.txt`).
 
+## What's new in v1.1.1
+
+Mod fixes only:
+
+- **Total power in special move scenes:** the panel now follows the game's
+  own script for each special move animation (the 9 script interpreters at
+  `0x020DBEF8`, running flag at `+0x248`) instead of guessing from black
+  screens. It no longer stays on screen after a save, no longer disappears
+  when the screen flickers for one frame, shows keeper saves decided without
+  a dice roll (normal shot vs. keeper special move, `ov87 0x02179A30`), and no
+  longer shows "calculating" on normal shots that get blocked or shots that go
+  wide. Checked against a test bench of 43 real plays from match logs.
+- **IE2 mechanics (move levels):** the game adds the use when the move is
+  chosen, before its banner; the banner now shows the level the move had when
+  it was used, and the "Lv +" notice comes afterwards, as in IE2.
+- **Japanese voices:** only the player voice banks are replaced now; five
+  sound-effect banks whose Japanese version has a different number of sounds
+  stay European, so shot blocks have sound again.
+
 ## What's new in v1.1
 
 - **Performance:** the heaviest special moves (Multi-dribble, Lightning
@@ -45,7 +64,7 @@ Full player instructions are in the release, in five languages (`README.txt`,
 - **Restart** works every time: the launcher, waiting hidden, reopens the
   game with the chosen language and mods (v1.0 started each new process from
   the previous one and closed after the third restart).
-- The window title is "Inazuma Eleven Recomp - FPS - v1.1"; the launcher and
+- The window title is "Inazuma Eleven Recomp - FPS - v1.1.x"; the launcher and
   the game use the DS icon from your ROM.
 - New mods: **IE2 mechanics** (move levels, IE2 shooting, shot blocks,
   talents, Mark can leave the team after the story, double EXP), **total

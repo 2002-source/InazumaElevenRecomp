@@ -1,5 +1,5 @@
-MODS - INAZUMA ELEVEN RECOMP  v1.1
-==================================
+MODS - INAZUMA ELEVEN RECOMP  v1.1.1
+====================================
 (Español: LEEME.txt - Français : LISEZMOI.txt - Deutsch: LIESMICH.txt -
 Italiano: LEGGIMI.txt)
 

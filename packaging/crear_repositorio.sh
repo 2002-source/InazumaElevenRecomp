@@ -90,7 +90,7 @@ fi
 du -sh "$REPO" | awk '{print "Tamano: " $1}'
 echo
 echo "Listo. Para subirlo (la primera vez), en esa carpeta:"
-echo "   git init -b main && git add . && git commit -m \"InazumaElevenRecomp v1.1\""
+echo "   git init -b main && git add . && git commit -m \"InazumaElevenRecomp v1.1.1\""
 echo "   git remote add origin https://github.com/2002-source/InazumaElevenRecomp.git && git push -u origin main"
 echo "Si ya estaba subido (v1.0), en esa carpeta:"
-echo "   git add -A && git commit -m \"InazumaElevenRecomp v1.1\" && git push"
+echo "   git add -A && git commit -m \"InazumaElevenRecomp v1.1.1\" && git push"

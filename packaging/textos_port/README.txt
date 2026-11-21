@@ -1,5 +1,5 @@
-INAZUMA ELEVEN RECOMP - PC PORT  v1.1
-=====================================
+INAZUMA ELEVEN RECOMP - PC PORT  v1.1.1
+=======================================
 A native PC version of Inazuma Eleven (Nintendo DS), made by static
 recompilation: the game's code was translated to PC code, so it runs at full
 speed without an emulator.
@@ -8,6 +8,20 @@ LIESMICH.txt (Deutsch), LEGGIMI.txt (Italiano).
 
 This package does NOT include the game. You need your own ROM (a dump of your
 own cartridge).
+
+
+WHAT'S NEW IN v1.1.1
+--------------------
+Mod fixes only:
+- Total power in moves: the panel now follows each special move's own
+  animation. It no longer stays on screen after a save, no longer vanishes
+  when the screen flickers (Spinning Cut), shows up when a keeper uses a
+  special move against a normal shot, and no longer shows "calculating" on
+  normal shots that get blocked or on shots that go wide.
+- IE2 mechanics (move levels): the move's banner shows the level it had when
+  it was used; the "Lv +" notice comes afterwards, as in IE2.
+- Japanese voices: shot blocks have sound again. If you use this mod, drag
+  the Japanese ROM onto PREPARAR again.
 
 
 WHAT'S NEW IN v1.1

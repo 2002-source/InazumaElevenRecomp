@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Titulo de la ventana del juego: "Inazuma Eleven Recomp - 59.9 FPS - v1.1"
+Titulo de la ventana del juego: "Inazuma Eleven Recomp - 59.9 FPS - v1.1.1"
 (antes "ndsrecomp firmware preview - 59.9 FPS - Gov S1").
 
 Toca runner/src/frontend.cpp. Se puede ejecutar varias veces: si ya estaba
@@ -10,7 +10,7 @@ Despues: bash scripts/paso_mingw.sh
 import re, sys
 
 FRONTEND = "C:/dev/ndsrecomp/runner/src/frontend.cpp"
-VERSION = "v1.1"
+VERSION = "v1.1.1"
 NOMBRE = "Inazuma Eleven Recomp"
 MARCA = "IE1_TITULO"
 

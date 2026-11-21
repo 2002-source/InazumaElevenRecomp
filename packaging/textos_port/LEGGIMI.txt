@@ -1,5 +1,5 @@
-INAZUMA ELEVEN RECOMP - PORT PER PC  v1.1
-=========================================
+INAZUMA ELEVEN RECOMP - PORT PER PC  v1.1.1
+===========================================
 Una versione nativa per PC di Inazuma Eleven (Nintendo DS), fatta con la
 ricompilazione statica: il codice del gioco è stato tradotto in codice per
 PC, quindi gira a piena velocità senza emulatore.
@@ -8,6 +8,20 @@ LISEZMOI.txt (Français), LIESMICH.txt (Deutsch).
 
 Questo pacchetto NON contiene il gioco. Ti serve la tua ROM (una copia della
 tua cartuccia).
+
+
+NOVITÀ DELLA v1.1.1
+-------------------
+Solo correzioni delle mod:
+- Potenza nelle tecniche: il pannello segue l'animazione di ogni tecnica. Non
+  resta più sullo schermo dopo una parata, non sparisce quando lo schermo
+  lampeggia, appare quando il portiere usa una tecnica contro un tiro normale
+  e non mostra più "calcolo" sui tiri normali bloccati né sui tiri fuori.
+- Meccaniche IE2 (livelli delle tecniche): lo striscione della tecnica mostra
+  il livello che aveva quando è stata usata; l'avviso "Lv +" arriva dopo, come
+  in IE2.
+- Voci giapponesi: i blocchi dei tiri hanno di nuovo il suono. Se usi questa
+  mod, trascina di nuovo la ROM giapponese su PREPARAR.
 
 
 NOVITÀ DELLA v1.1

@@ -141,12 +141,26 @@ def silenciar_swd(d):
     return bytes(d)
 
 
+def banco_de_voces(nombre):
+    """Bancos que son voces de jugadores y pasan a japones: 3D_003_NNx (gritos de los
+    jugadores) y 2D_020_NN. Los demas bancos que cambian en la japonesa (3D_006, 3D_087,
+    3D_089, 3D_095, 3D_901) son de efectos y tienen otro numero de sonidos que la europea:
+    con ellos el juego europeo pedia sonidos que no existen y los bloqueos de tiro se
+    quedaban mudos (probado por el usuario, 2026-11-21, tambien con --con-ingles). Se
+    dejan los europeos."""
+    n = nombre.upper()
+    return n.startswith("3D_003_") or n.startswith("2D_020_")
+
+
 def voz_inglesa_sin_pareja(nombre, nombres_base=()):
     """Bancos de voces que anadio la version europea y que la japonesa no tiene:
-    3D_NNN0 = gritos con el nombre de la tecnica NNN, SOLO si existe su banco 3D_NNN (igual
-    en las dos versiones, con los efectos). Las tecnicas sin 3D_NNN (090, 124-146, 222-252,
-    323-349) llevan los efectos dentro de su 3D_NNN0: esos no se tocan, o la tecnica se
-    queda muda. 3D_003_31..48 = voces de gol de los equipos rivales."""
+    3D_NNN0 = gritos con el nombre de la tecnica NNN, SOLO si existe su banco 3D_NNN en las
+    DOS versiones (nombres_base = bancos de la europea que tambien tiene la japonesa: ese
+    banco lleva los efectos). Las tecnicas sin 3D_NNN (090, 124-146, 222-252, 323-349) llevan
+    los efectos dentro de su 3D_NNN0: esos no se tocan, o la tecnica se queda muda. Lo mismo
+    si su 3D_NNN solo esta en la europea: El Muro (120) tiene 3D_120 y 3D_1200, los dos solo
+    en la europea; con 3D_1200 en silencio los bloqueos con El Muro se quedaban sin sonido.
+    3D_003_31..48 = voces de gol de los equipos rivales."""
     n = nombre.upper()
     if not n.endswith(".SWD"):
         return False
@@ -286,21 +300,26 @@ def main(argv=None):
     # 4) bancos de sonido de los partidos y escenas (.SWD + .SED) dentro de sound.pb
     sueltos = {r.rsplit("/", 1)[1]: d for r, d in jp.items()
                if r.startswith("/data_iz/sound/") and r.count("/") == 3 and r.upper().endswith((".SWD", ".SED", ".SMD"))}
-    bancos_cambiados, bancos_solo_eu, silenciados = [], [], []
+    bancos_cambiados, bancos_solo_eu, silenciados, efectos_eu = [], [], [], []
     for ruta_ph in sorted(r for r in base if r.startswith("/data_iz/sound/") and r.endswith("/sound.ph")):
         ruta_pb = ruta_ph[:-1] + "b"
         if ruta_pb not in base:
             continue
         entradas = leer_paquete(base[ruta_ph], base[ruta_pb])
         nombres_paquete = {n.upper() for n, _ in entradas}
+        nombres_jp = {n.upper() for n in sueltos}
         nuevas = []
         for nombre, datos in entradas:
             j = sueltos.get(nombre)
-            if j is not None and j != datos:
+            if j is not None and j != datos and not banco_de_voces(nombre):
+                nuevas.append((nombre, datos))           # efectos: se queda el europeo
+                if nombre.upper().endswith(".SWD"):
+                    efectos_eu.append((nombre, datos, j))
+            elif j is not None and j != datos:
                 nuevas.append((nombre, j))
                 if nombre.upper().endswith(".SWD"):
                     bancos_cambiados.append((nombre, datos, j))
-            elif j is None and not a.con_ingles and voz_inglesa_sin_pareja(nombre, nombres_paquete):
+            elif j is None and not a.con_ingles and voz_inglesa_sin_pareja(nombre, nombres_paquete & nombres_jp):
                 nuevas.append((nombre, silenciar_swd(datos)))
                 silenciados.append(nombre)
                 bancos_solo_eu.append((nombre, datos))
@@ -345,12 +364,17 @@ def main(argv=None):
         f.write(f"\n\nBancos de sonido (.SWD de sound.pb) que pasan a japones ({len(bancos_cambiados)}):\n")
         f.write("".join(f"  {n:<16} europea: {resumen_banco(e):<24} japonesa: {resumen_banco(j)}\n"
                         for n, e, j in bancos_cambiados))
+        f.write(f"\nBancos de efectos distintos en la japonesa que se dejan europeos ({len(efectos_eu)}; con los"
+                " japoneses se quedaban mudos los bloqueos de tiro):\n")
+        f.write("".join(f"  {n:<16} europea: {resumen_banco(e):<24} japonesa: {resumen_banco(j)}\n"
+                        for n, e, j in efectos_eu))
         f.write(f"\nBancos que solo tiene la europea ({len(bancos_solo_eu)}; los marcados con * se silencian:"
                 " voces inglesas de tecnicas y de goles rivales, que la japonesa no tiene):\n")
         f.write("".join(f"  {'*' if n in silenciados else ' '} {n:<16} {resumen_banco(e)}\n" for n, e in bancos_solo_eu))
     print(f"Voces de cinematicas: {voces}")
     print(f"Bancos de voces de partidos y escenas: {len(bancos_cambiados)} pasan a japones, "
-          f"{len(bancos_solo_eu)} solo existen en la europea ({len(silenciados)} voces inglesas silenciadas)"
+          f"{len(bancos_solo_eu)} solo existen en la europea ({len(silenciados)} voces inglesas silenciadas), "
+          f"{len(efectos_eu)} bancos de efectos se dejan europeos"
           + (f" (voces en .wav en {a.wav})" if a.wav else ""))
     print(f"Iguales en las dos: {len(iguales)}; solo en la europea: {len(solo_eu)}; solo en la japonesa: {len(solo_jp)}"
           f" (detalle en {os.path.join(dest, 'informe_audios.txt')})")

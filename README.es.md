@@ -29,6 +29,26 @@ firmware, partida ni código generado a partir de la ROM.
 Las instrucciones completas para jugar vienen en la descarga, en cinco idiomas
 (`LEEME.txt`, `README.txt`, `LISEZMOI.txt`, `LIESMICH.txt`, `LEGGIMI.txt`).
 
+## Novedades de la v1.1.1
+
+Solo correcciones de los mods:
+
+- **Valor en las supertécnicas:** el panel sigue el propio guion del juego
+  para la animación de cada técnica (los 9 intérpretes de guion de
+  `0x020DBEF8`, marca de "en marcha" en `+0x248`) en vez de adivinar con los
+  negros de pantalla. Ya no se queda en pantalla después de una parada, no
+  desaparece cuando la pantalla parpadea un fotograma, enseña las paradas que
+  el juego decide sin tirada (tiro normal contra técnica del portero,
+  `ov87 0x02179A30`) y ya no pone "calculando" en tiros normales bloqueados ni
+  en tiros que se van fuera. Comprobado con un banco de pruebas de 43 jugadas
+  reales sacadas de registros de partidos.
+- **Mecánicas IE2 (niveles de supertécnicas):** el juego suma el uso al elegir
+  la técnica, antes de su cartel; ahora el cartel lleva el grado que tenía al
+  usarla y el aviso "Nv +" sale después, como en el IE2.
+- **Voces japonesas:** solo se cambian los bancos de voces de los jugadores;
+  cinco bancos de efectos cuya versión japonesa tiene otro número de sonidos
+  se quedan europeos, así que los bloqueos de tiro vuelven a sonar.
+
 ## Novedades de la v1.1
 
 - **Rendimiento:** las supertécnicas más pesadas (Regate Múltiple, Ruptura
@@ -46,7 +66,7 @@ Las instrucciones completas para jugar vienen en la descarga, en cinco idiomas
 - **Reiniciar** funciona siempre: el lanzador, que espera oculto, vuelve a
   abrir el juego con el idioma y los mods elegidos (la v1.0 abría cada proceso
   nuevo desde el anterior y se cerraba al tercer reinicio).
-- La ventana se llama "Inazuma Eleven Recomp - FPS - v1.1"; el lanzador y el
+- La ventana se llama "Inazuma Eleven Recomp - FPS - v1.1.x"; el lanzador y el
   juego usan el icono de la DS sacado de tu ROM.
 - Mods nuevos: **Mecánicas IE2** (niveles de supertécnicas, tiro del IE2,
   bloqueos de tiro, talentos, Mark se puede quitar del equipo tras la

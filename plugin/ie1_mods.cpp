@@ -2602,17 +2602,24 @@ Fase fase_tiro(int v, bool aliado, int rodar = 0) {
 }
 std::vector<Fase> g_cola;            // fases preparadas para las proximas escenas
 bool g_negro = true;                 // estado de la pantalla en el fotograma anterior
+bool g_portero_repetido = false;     // lo que se ve es la repeticion de la parada (mas abajo)
+bool g_panel_por_guion = false;    // el panel de la parada sigue al guion de su tecnica (mas abajo)
 bool g_en_tecnica = false;           // ha salido un cartel de supertecnica desde el ultimo negro
 bool g_est_tiro = false;             // lo que se ve es un tiro solo
 // registro de las decisiones del panel: siempre (pocas lineas); IE1_VALOR_REG=0 lo quita
 bool g_reg_panel = [] { const char* e = std::getenv("IE1_VALOR_REG"); return !(e && *e == '0'); }();
+void aviso_panel_visto();        // (mas abajo) el panel se ha ensenado (para los avisos)
 void mostrar_ya(const Fase& f) {
     if (g_reg_panel) logf("[valor] panel: ensenar %d contra %d (gana %d, calculando %d)", f.izq, f.der, f.ganador, f.rodar);
     g_est.visible = true; g_est.t = 0; g_est.dur = 1 << 30; g_est.rodar = f.rodar;
     g_est.izq = f.izq; g_est.der = f.der; g_est.ganador = f.ganador;
     g_est_tiro = f.tiro;
+    g_portero_repetido = false;
+    g_panel_por_guion = false;
+    aviso_panel_visto();
 }
-void ocultar() { g_est.visible = false; g_cola.clear(); g_duelo_n = 0; g_duelo_tec = false; g_duelo_izq = g_duelo_der = -1; }
+int g_portero_rep_ocultar();   // (mas abajo)
+void ocultar() { g_portero_rep_ocultar(); g_est.visible = false; g_cola.clear(); g_duelo_n = 0; g_duelo_tec = false; g_duelo_izq = g_duelo_der = -1; }
 // Duelo listo (regate y defensa calculados) y parada lista: se ensenan en la escena de su
 // supertecnica, es decir, cuando sale su cartel (asi nunca caen fuera de una escena)
 Fase g_duelo_listo; bool g_hay_duelo = false;
@@ -2622,6 +2629,55 @@ Fase g_duelo_listo; bool g_hay_duelo = false;
 bool g_fallo_pend = false; int g_fallo_saltar = 0;
 bool g_cartel_portero = false;       // ya salio el cartel de la parada en esta escena
 Fase g_portero_listo; bool g_hay_portero = false;
+// Parada con supertecnica: su escena tiene varios cortes (con negro entre ellos) y el cartel
+// Registro del 2026-11-21 (Defensa triple, 169): el cartel sale con la pantalla en negro y
+// la animacion es UN corte (465 fotogramas); el siguiente (3066) ya es el campo con el
+// dialogo. Asi que:
+//  - cartel en negro: el corte que empieza es la animacion; el panel ya esta puesto y no
+//    se repite nada;
+//  - cartel con imagen: puede llegar al final del corte anterior (tras el bloqueo de Jack,
+//    2026-11-20: el negro lo quitaba antes de la animacion); se repite en el corte
+//    siguiente, pero como mucho kPorteroMax fotogramas (si ese corte ya era el campo).
+// Se deja de repetir con la fila 31 (alguien tiene el balon) o con otra jugada.
+Fase g_portero_fase; int g_portero_rep = 0;
+// Fase 2 (2026-11-21): si se pueden leer los guiones del juego, el panel de la parada se guia
+// por el guion de su tecnica (el que corre cuando sale el cartel): se queda mientras corre,
+// aunque haya negros, y se quita cuando acaba. Sin guiones, lo de arriba (respaldo).
+bool dueno_cartel_ok();          // (mas abajo) el cartel tiene guion de tecnica conocido
+void apuntar_guion_cartel();     // (mas abajo) apunta el guion que corre al salir el cartel
+void apuntar_guion_tiro();       // (mas abajo) ese guion es el de una supertecnica de tiro
+bool tiro_vigilado();            // (mas abajo) el tiro con tecnica se sigue por su guion
+// Avisos automaticos (2026-11-21): el propio mod apunta en el registro "[valor] AVISO ..."
+// cuando algo no cuadra, para no tener que vigilar el panel jugando:
+//  - acaba el guion de una tecnica con cartel y el panel no se enseno en ningun momento;
+//  - el panel lleva mas de kAvisoLargo fotogramas seguidos en pantalla.
+struct AvisoCartel { int tecnica = 0, tipo = 0, k = -1; uint32_t act = 0; bool visto = false; };
+AvisoCartel g_aviso_cartel;
+void apuntar_aviso_cartel(int tecnica);   // (mas abajo)
+void dueno_cartel_a_portero();   // (mas abajo) ese guion pasa a ser el del panel de la parada
+bool dueno_corre();              // (mas abajo) el guion del panel sigue corriendo
+// Duelos y bloqueos con tecnica (2026-11-21): igual que la parada, el panel sigue al guion
+// de la tecnica. Corte giratorio de Erik (133): la pantalla parpadeo en negro 1 fotograma al
+// empezar la animacion y el panel se quitaba a los 2 fotogramas.
+void seguir_cartel() {
+    if (!dueno_cartel_ok()) return;
+    dueno_cartel_a_portero(); g_panel_por_guion = true;
+}
+// Tiro sin tecnica que llega al portero (ov87 0x021798xx..0x02179A74): el juego calcula el tiro
+// (filas 4/5/6, con el ajuste de distancia) y la parada (7/8/10) SIN tirada de azar, y en
+// 0x02179A30 los compara: si la parada >= tiro, gana el portero ahi mismo (devuelve 6 = con su
+// tecnica, o 0) y no hay mas calculos; si no, despues viene el calculo de verdad (con azar).
+// Caso: volea de Kevin 135 contra Poseidon 143 con tecnica (2026-11-21 01:11:49).
+// Esa parada ganada se ensena con el cartel de la tecnica del portero.
+Fase g_parada_prev; bool g_hay_parada_prev = false;
+int g_prev_tiro_llega = -1; bool g_prev_tiro_aliado = true;
+void portero_visto(const Fase& f) {
+    g_portero_fase = f;
+    if (dueno_cartel_ok()) { dueno_cartel_a_portero(); g_panel_por_guion = true; g_portero_rep = 0; return; }
+    g_portero_rep = g_negro ? 0 : 1;
+}
+unsigned g_vfot = 0, g_vfot_escena = 0;   // fotogramas (para el registro: lo que dura cada corte)
+constexpr unsigned kPorteroMax = 600;     // 10 s: la animacion mas larga vista dura 465
 // Bloqueos (codigo del juego, overlay 15, 0x02143C70..0x02143DD0): al llegar el tiro al
 // defensa, el juego vuelve a calcular el tiro con el ajuste de distancia de ese momento
 // (es el ultimo tiro del registro) y despues el bloqueo (fila 28 con tecnica de defensa,
@@ -2647,21 +2703,132 @@ bool repeticion();   // mas abajo: el juego esta ensenando la repeticion del gol
 void cartel(int tecnica, bool aliado_cartel) {
     if (repeticion()) return;
     g_en_tecnica = true;
+    apuntar_guion_cartel();
+    apuntar_aviso_cartel(tecnica);
     const int tipo = ent::tipo_tecnica(tecnica);
-    if (g_reg_panel) logf("[valor] panel: cartel de la tecnica %d (tipo %d)", tecnica, tipo);
+    if (tipo != 8 && tecnica != 0) { g_portero_rep = 0; g_hay_parada_prev = false; }   // otra jugada
+    if (g_reg_panel) logf("[valor] panel: cartel de la tecnica %d (tipo %d, fotograma %u, pantalla %s)", tecnica, tipo, g_vfot, g_negro ? "en negro" : "con imagen");
     if (tipo == 7 && g_hay_contra) {                       // bloqueo con tecnica de tiro
         g_cola.clear(); g_hay_duelo = false; g_espera_tiro = false; g_tiro_giraba = false;
-        mostrar_ya(g_contra_listo); g_hay_contra = false;
+        mostrar_ya(g_contra_listo); g_hay_contra = false; seguir_cartel();
     } else if (tipo == 7) {                                // tiro: aun sin valor
         g_cola.clear(); g_hay_duelo = false; g_espera_tiro = false; g_tiro_de_aliado = aliado_cartel; g_tiro_tecnica = true;
         mostrar_ya(fase_tiro(-2, aliado_cartel)); g_tiro_llega = -1; g_tiro_giraba = true; g_tiro_cerrado = false;
+        apuntar_guion_tiro();
         g_giro_extra = g_negro ? -1 : 0;                   // (el cartel sale antes de que empiece su escena)
     } else if ((tipo == 5 || tipo == 6) && g_hay_duelo) {
         mostrar_ya(g_duelo_listo);                          // regate o defensa con tecnica
         if (g_fallo_pend) g_fallo_saltar = g_negro ? 1 : 0;   // la escena que empieza es la de la tecnica
+        seguir_cartel();
+        if (g_panel_por_guion) g_fallo_saltar = 0;           // con guion, sus cortes no cuentan como escenas
     } else if (tecnica == 0 || tipo == 8) {                // parada con tecnica
         g_cartel_portero = true;                           // (por si su valor llega despues)
-        if (g_hay_portero) { mostrar_ya(g_portero_listo); g_hay_portero = false; g_cola.clear(); }
+        if (g_hay_portero) { mostrar_ya(g_portero_listo); portero_visto(g_portero_listo); g_hay_portero = false; g_cola.clear(); }
+        else if (g_hay_parada_prev) {                      // tiro sin tecnica parado sin calculo con azar
+            mostrar_ya(g_parada_prev); portero_visto(g_parada_prev); g_hay_parada_prev = false; g_cola.clear();
+        }
+    }
+}
+// Guiones del juego (fase 2: saber por el juego cuando corre la animacion de una tecnica).
+// Hay 9 interpretes de guion (punteros en 0x020DBEF8, objetos de 0x3C0 bytes): +0x23C = id del
+// guion (act), +0x248 = 1 mientras corre, +0x268 = fotogramas. Estados del usuario
+// (2026-11-21, Defensa triple de Mark): durante la animacion el interprete 2 corre el guion
+// act 0x1929E con +0x248 = 1; antes y despues, todos a 0. De momento solo se registra cuando
+// empieza y acaba cada guion en los partidos, para comprobarlo con todo tipo de jugadas.
+constexpr uint32_t kInterpretes = 0x020DBEF8u;
+uint32_t g_guion_act[9] = {}, g_guion_desde[9] = {};
+bool g_guion_corre[9] = {};
+// Guion de la tecnica del ultimo cartel (el que mas tarde empezo de los que corren; en los
+// registros es siempre el interprete 2) y guion del que depende el panel de la parada
+int g_cartel_k = -1; uint32_t g_cartel_act = 0;
+int g_dueno_k = -1; uint32_t g_dueno_act = 0;
+// Guion de la supertecnica de tiro que espera su valor ("calculando"). Registro del 2026-11-21
+// 09:35:48: el tiro 142 de Jude se fue fuera; el juego no lo calculo y el panel seguia
+// "calculando" 2 cortes mas. En los tiros que llegan al portero el valor llega siempre antes de
+// que empiece el guion siguiente; si acabo el del tiro y empieza otro sin valor, se quita.
+int g_tiro_k = -1; uint32_t g_tiro_act = 0;
+bool g_guiones_ok = false;       // se estan leyendo (partido con el overlay 15)
+void apuntar_guion_cartel() {
+    g_cartel_k = -1;
+    if (!g_guiones_ok) return;
+    uint32_t mejor = 0;
+    for (int k = 0; k < 9; ++k)
+        if (g_guion_corre[k] && g_guion_act[k] != 0 && g_guion_act[k] != 0x7530u && (g_cartel_k < 0 || g_guion_desde[k] >= mejor)) {
+            g_cartel_k = k; mejor = g_guion_desde[k];
+        }
+    if (g_cartel_k >= 0) g_cartel_act = g_guion_act[g_cartel_k];
+}
+bool dueno_cartel_ok() { return g_cartel_k >= 0 && g_guion_corre[g_cartel_k] && g_guion_act[g_cartel_k] == g_cartel_act; }
+void dueno_cartel_a_portero() { g_dueno_k = g_cartel_k; g_dueno_act = g_cartel_act; }
+void apuntar_guion_tiro() { if (dueno_cartel_ok()) { g_tiro_k = g_cartel_k; g_tiro_act = g_cartel_act; } else g_tiro_k = -1; }
+bool tiro_vigilado() { return g_guiones_ok && g_tiro_k >= 0; }
+void apuntar_aviso_cartel(int tecnica) {
+    if (dueno_cartel_ok()) g_aviso_cartel = AvisoCartel{tecnica, ent::tipo_tecnica(tecnica), g_cartel_k, g_cartel_act, g_est.visible};
+    else g_aviso_cartel = AvisoCartel{};
+}
+void aviso_panel_visto() {
+    if (g_aviso_cartel.k >= 0 && g_guion_corre[g_aviso_cartel.k] && g_guion_act[g_aviso_cartel.k] == g_aviso_cartel.act) g_aviso_cartel.visto = true;
+}
+constexpr unsigned kAvisoLargo = 1200;   // 20 s: lo mas largo visto (tiro + corte siguiente) no llega a 1100
+unsigned g_aviso_visible_desde = 0; bool g_aviso_largo_dado = false; int g_avisos = 0;
+void avisos_tick() {
+    // panel demasiado tiempo en pantalla
+    if (g_est.visible) {
+        if (g_aviso_visible_desde == 0) g_aviso_visible_desde = g_vfot;
+        if (!g_aviso_largo_dado && g_vfot - g_aviso_visible_desde > kAvisoLargo) {
+            g_aviso_largo_dado = true; ++g_avisos;
+            logf("[valor] AVISO: el panel lleva %u fotogramas en pantalla (%s contra %s): no deberia durar tanto",
+                 kAvisoLargo, std::to_string(g_est.izq).c_str(), std::to_string(g_est.der).c_str());
+        }
+    } else { g_aviso_visible_desde = 0; g_aviso_largo_dado = false; }
+}
+bool dueno_corre() { return g_dueno_k >= 0 && g_guion_corre[g_dueno_k] && g_guion_act[g_dueno_k] == g_dueno_act; }
+void guiones_tick() {
+    if (!g_mem) return;
+    // solo en los partidos (overlay 15 cargado: el manejador del cartel en su sitio)
+    if (g_mem->r32(0x02155B34u) != 0xEBFC2588u) {
+        if (g_guiones_ok) { for (bool& c : g_guion_corre) c = false; g_guiones_ok = false; g_dueno_k = g_cartel_k = -1; }
+        return;
+    }
+    g_guiones_ok = true;
+    for (int k = 0; k < 9; ++k) {
+        const uint32_t b = g_mem->r32(kInterpretes + 4u * uint32_t(k));
+        const bool ok = b >= 0x02000000u && b < 0x023F0000u;
+        const bool corre = ok && g_mem->r32(b + 0x248u) == 1u;
+        const uint32_t act = ok ? g_mem->r32(b + 0x23Cu) : 0;
+        if (corre && (!g_guion_corre[k] || act != g_guion_act[k])) {
+            if (g_reg_panel) logf("[valor] guion %d empieza: act 0x%X (fotograma %u)", k, act, g_vfot);
+            g_guion_desde[k] = g_vfot;
+            // otro guion (no el del propio tiro, ni los de fondo 0 / 0x7530) con el tiro aun sin valor
+            if (g_tiro_k >= 0 && act != 0 && act != 0x7530u && act != g_tiro_act &&
+                !(g_guion_corre[g_tiro_k] && g_guion_act[g_tiro_k] == g_tiro_act)) {
+                if (g_tiro_giraba && g_est.visible && g_est_tiro && (g_est.izq == -2 || g_est.der == -2)) {
+                    if (g_reg_panel) logf("[valor] panel: el tiro acabo sin calculo (empieza el guion act 0x%X): se quita", act);
+                    g_est.visible = false;
+                }
+                if (g_tiro_giraba) g_tiro_giraba = false;
+                g_tiro_k = -1;
+            }
+        } else if (!corre && g_guion_corre[k]) {
+            if (g_reg_panel) logf("[valor] guion %d acaba: act 0x%X (fotograma %u, duro %u)", k, g_guion_act[k], g_vfot, g_vfot - g_guion_desde[k]);
+        }
+        g_guion_corre[k] = corre; g_guion_act[k] = act;
+    }
+    // acabo el guion del ultimo cartel sin que el panel se ensenara
+    if (g_aviso_cartel.k >= 0 && !(g_guion_corre[g_aviso_cartel.k] && g_guion_act[g_aviso_cartel.k] == g_aviso_cartel.act)) {
+        if (!g_aviso_cartel.visto) {
+            ++g_avisos;
+            logf("[valor] AVISO: la tecnica %d (tipo %d, act 0x%X) acabo sin que saliera el panel", g_aviso_cartel.tecnica, g_aviso_cartel.tipo, g_aviso_cartel.act);
+        }
+        g_aviso_cartel = AvisoCartel{};
+    }
+    // acabo el guion de la parada: se quita su panel
+    if (g_dueno_k >= 0 && !dueno_corre()) {
+        if (g_panel_por_guion && g_est.visible) {
+            if (g_reg_panel) logf("[valor] panel: acabo el guion de la tecnica (act 0x%X): se quita", g_dueno_act);
+            g_est.visible = false;
+        }
+        g_panel_por_guion = false; g_dueno_k = -1;
     }
 }
 // Cada fotograma, con la imagen de la pantalla de las escenas
@@ -2674,24 +2841,45 @@ void pantalla(const uint32_t* px, int ancho) {
             suma += (c >> 16 & 255) + (c >> 8 & 255) + (c & 255); ++n;
         }
     const bool negro = n && suma / (3L * n) < 10;
+    ++g_vfot;
+    guiones_tick();
+    if (g_est.visible) aviso_panel_visto();
+    avisos_tick();
+    if (g_portero_repetido && g_est.visible && !negro && g_vfot - g_vfot_escena > kPorteroMax) {
+        if (g_reg_panel) logf("[valor] panel: la parada repetida pasa de %u fotogramas: se quita", kPorteroMax);
+        g_est.visible = false; g_portero_repetido = false;
+    }
     if (negro && !g_negro) {                                    // acaba la escena
         if (g_est.visible && g_est_tiro) g_pred_dos = true;         // era la de un tiro
-        g_est.visible = false; g_en_tecnica = false; g_cartel_portero = false;
+        if (!(g_panel_por_guion && dueno_corre())) g_est.visible = false;   // la parada sigue con su guion
+        g_en_tecnica = false; g_cartel_portero = false;
     }
     if (!negro && g_negro) {                                    // empieza una escena
-        if (g_reg_panel) logf("[valor] panel: empieza una escena (%zu fases preparadas)", g_cola.size());
-        if (g_fallo_pend && g_fallo_saltar > 0) {
+        if (g_reg_panel) logf("[valor] panel: empieza una escena (%zu fases preparadas; la anterior duro %u fotogramas; fotograma %u)", g_cola.size(), g_vfot - g_vfot_escena, g_vfot);
+        g_vfot_escena = g_vfot;
+        if (g_panel_por_guion && dueno_corre()) {
+            // otro corte (o un parpadeo) de la misma tecnica: el panel sigue, nada mas
+        } else if (g_fallo_pend && g_fallo_saltar > 0) {
             --g_fallo_saltar;                                   // la de la tecnica (ya tiene su panel)
         } else if (g_fallo_pend) {                              // la del fallo del duelo
             g_fallo_pend = false;
             mostrar_ya(g_duelo_listo);
-        } else if (g_espera_tiro) {                             // la escena del tiro: "calculando"
+        } else if (g_espera_tiro) {                             // la escena de un tiro SIN tecnica
+            // No se ensena nada (2026-11-21, pedido por el usuario): si lo bloquea un jugador
+            // sin tecnica o lo para el portero, el "calculando" se quedaba un rato y se iba.
+            // Sus valores salen cuando el juego los calcula (en la escena siguiente).
             g_espera_tiro = false; g_cola.clear();
-            mostrar_ya(fase_tiro(-2, g_tiro_de_aliado)); g_tiro_giraba = true; g_tiro_llega = -1; g_giro_extra = 0;
+            g_tiro_giraba = true; g_tiro_llega = -1; g_giro_extra = 0;
         } else if (!g_cola.empty()) {                           // siguiente fase preparada
             mostrar_ya(g_cola.front());
             g_cola.erase(g_cola.begin());
-        } else if (g_tiro_giraba && g_giro_extra < (g_tiro_tecnica ? 2 : 1)) {   // el tiro sigue: aun sin valor
+        } else if (g_portero_rep > 0) {                         // otro corte de la parada con tecnica
+            --g_portero_rep;
+            mostrar_ya(g_portero_fase);
+            g_portero_repetido = true;
+        } else if (g_tiro_giraba && g_tiro_tecnica && tiro_vigilado()) {     // con guion: hasta su valor u otro guion
+            mostrar_ya(fase_tiro(-2, g_tiro_de_aliado));
+        } else if (g_tiro_giraba && g_tiro_tecnica && g_giro_extra < 2) {   // supertecnica: sigue sin valor
             ++g_giro_extra;     // tiro normal: solo en la escena siguiente; supertecnica: sus cortes
             mostrar_ya(fase_tiro(-2, g_tiro_de_aliado));
         } else if (g_tiro_giraba) {
@@ -2717,10 +2905,10 @@ bool repeticion() {
     if (g_est.visible || !g_cola.empty() || g_tiro_giraba || g_espera_tiro) {
         if (g_reg_panel && aviso < 20) { ++aviso; logf("[valor] panel: repeticion del gol: sin panel"); }
     }
-    g_est.visible = false; g_cola.clear();
+    g_est.visible = false; g_cola.clear(); g_portero_rep = 0;
     g_tiro_giraba = g_espera_tiro = g_prev_tiro = false;
     g_fallo_pend = false; g_hay_duelo = false; g_hay_portero = false; g_hay_contra = false;
-    g_cartel_portero = false; g_en_tecnica = false; g_pred_dos = false;
+    g_cartel_portero = false; g_en_tecnica = false; g_pred_dos = false; g_hay_parada_prev = false;
     g_reg.hay = g_def.hay = false;
     return true;
 }
@@ -2728,6 +2916,7 @@ void evento(int fila, int valor, bool real, bool es_aliado, int pct_dist) {
     if (repeticion()) return;
     if (fila == 31) {                       // alguien tiene el balon: acabo la jugada
         g_pred_dos = false; g_tiro_giraba = false;
+        if (g_portero_rep > 0 && !g_hay_portero && !g_cartel_portero) g_portero_rep = 0;
         // si aun se ve un tiro "calculando", su valor ya no va a llegar (el juego resolvio
         // el tiro sin calcularlo: algunos despejes y tiros de 3 jugadores): se quita
         if (g_est.visible && g_est_tiro && (g_est.izq == -2 || g_est.der == -2)) {
@@ -2736,15 +2925,27 @@ void evento(int fila, int valor, bool real, bool es_aliado, int pct_dist) {
         }
     }
     if (!real) {                           // previsiones (sin dado): no se ensenan, pero las de
-        if (fila == 4) { g_prev_tiro = true; g_pred_dos = false; g_tiro_de_aliado = es_aliado; g_tiro_tecnica = false; }   // tiro + parada: viene un tiro
-        else if (fila == 8 && g_prev_tiro) { g_espera_tiro = true; g_prev_tiro = false; g_tiro_cerrado = false; }
+        if (fila == 4 || fila == 5 || fila == 6) {         // tiro + parada: viene un tiro
+            g_prev_tiro = true; g_pred_dos = false; g_tiro_de_aliado = es_aliado; g_tiro_tecnica = false;
+            g_prev_tiro_llega = valor + valor * pct_dist / 100; g_prev_tiro_aliado = es_aliado; g_hay_parada_prev = false;
+        }
+        else if ((fila == 7 || fila == 8 || fila == 10) && g_prev_tiro) {
+            g_espera_tiro = true; g_prev_tiro = false; g_tiro_cerrado = false;
+            if (g_prev_tiro_llega >= 0 && valor >= g_prev_tiro_llega) {   // gana el portero sin mas calculos
+                Fase f;
+                if (g_prev_tiro_aliado) { f.izq = vis(g_prev_tiro_llega); f.der = vis(valor); f.ganador = 2; }
+                else { f.izq = vis(valor); f.der = vis(g_prev_tiro_llega); f.ganador = 1; }
+                g_parada_prev = f; g_hay_parada_prev = true;
+                if (g_reg_panel) logf("[valor] panel: el portero gana sin tirada (%d contra %d): con su tecnica, si la usa", valor, g_prev_tiro_llega);
+            }
+        }
         else if (fila != 14 && fila != 15 && fila != 31) g_prev_tiro = false;
         if (fila == 1 || fila == 3) g_pred_dos = true;              // viene un duelo
         return;
     }
     // duelos: regate (1/25) y defensa (3/27); solo si alguno usa supertecnica
     if (fila == 1 || fila == 25 || fila == 3 || fila == 27) {
-        g_tiro_giraba = false;
+        g_tiro_giraba = false; g_portero_rep = 0;
         if (g_est.visible) return;         // repeticiones durante la propia escena
         Lado& l = (fila == 1 || fila == 25) ? g_reg : g_def;
         l = Lado{true, valor, es_aliado, fila == 25 || fila == 27};
@@ -2760,7 +2961,7 @@ void evento(int fila, int valor, bool real, bool es_aliado, int pct_dist) {
                 // solo uno con tecnica y pierde: tambien en la escena del fallo
                 g_fallo_pend = (g_reg.tec != g_def.tec) && ((g_reg.tec && !gana_reg) || (g_def.tec && gana_reg));
                 g_fallo_saltar = 0;
-                if (g_en_tecnica && !g_negro) mostrar_ya(g_duelo_listo);   // ya en su escena
+                if (g_en_tecnica && !g_negro) { mostrar_ya(g_duelo_listo); seguir_cartel(); }   // ya en su escena
             }
             g_reg.hay = g_def.hay = false;
         }
@@ -2789,19 +2990,20 @@ void evento(int fila, int valor, bool real, bool es_aliado, int pct_dist) {
         if (para) { g_tiro_llega = -1; g_tiro_cerrado = true; }   // el tiro ya no llega al portero
         if (fila == 28) {                                    // se ensena con su cartel (tipo defensa)
             g_duelo_listo = f; g_hay_duelo = true; g_fallo_pend = false;
-            if (g_en_tecnica && !g_negro) mostrar_ya(f);
+            if (g_en_tecnica && !g_negro) { mostrar_ya(f); seguir_cartel(); }
         } else {                                             // con su cartel (tipo tiro)
             g_contra_listo = f; g_hay_contra = true;
-            if (g_en_tecnica && !g_negro && g_tiro_giraba) { g_tiro_giraba = false; g_hay_contra = false; mostrar_ya(f); }
+            if (g_en_tecnica && !g_negro && g_tiro_giraba) { g_tiro_giraba = false; g_hay_contra = false; mostrar_ya(f); seguir_cartel(); }
         }
         return;
     }
     // tiro real (normal, volea, testarazo, vaselina o supertecnica)
     if (fila == 4 || fila == 5 || fila == 6 || fila == 9) {
         if (g_tiro_cerrado) return;        // el juego repite el calculo despues: ya esta ensenado
-        g_hay_duelo = false;
+        g_hay_duelo = false; g_portero_rep = 0; g_hay_parada_prev = false;
         g_tiro_llega = valor + valor * pct_dist / 100;
         g_tiro_aliado = es_aliado;
+        g_tiro_k = -1;
         g_ult_tiro = UltimoTiro{true, g_tiro_llega, es_aliado};
         g_espera_tiro = false;
         if (g_tiro_giraba) {               // su panel estaba "calculando"
@@ -2822,7 +3024,7 @@ void evento(int fila, int valor, bool real, bool es_aliado, int pct_dist) {
         else { f.izq = vis(valor); f.der = vis(g_tiro_llega); f.ganador = gol ? 2 : 1; }
         if (fila == 10) {                                  // con su cartel
             g_portero_listo = f; g_hay_portero = true;
-            if (g_cartel_portero && !g_negro) { mostrar_ya(f); g_hay_portero = false; }   // el cartel ya salio
+            if (g_cartel_portero && !g_negro) { mostrar_ya(f); portero_visto(f); g_hay_portero = false; }   // el cartel ya salio
         }
         if (gol || fila != 10) {
             // Gol: no hay escena del portero (ni con fila 10: el portero la intenta sin
@@ -2847,6 +3049,7 @@ void evento(int fila, int valor, bool real, bool es_aliado, int pct_dist) {
     }
 }
 void avanzar() {}
+int g_portero_rep_ocultar() { return g_portero_rep = 0; }
 // Barra de PT al centro en los duelos y las paradas (dos valores); en los tiros, en su sitio.
 // La barra es un grupo de rectangulos 3D que crea 0x0205F15C al empezar cada escena de
 // supertecnica, con mbd_g00 (marco, x=8) y mbd_g01/g02 (relleno, x=40), todos con y=8:
@@ -3179,6 +3382,18 @@ int ie1_grado(int tecnica, int usos) {
     }
     return 0;
 }
+// Uso que sube de grado (2026-11-21, Defensa triple de Mark): el juego suma el uso al elegir la
+// tecnica, antes del calculo y del cartel, asi que el cartel salia ya con el grado nuevo ("++"
+// en vez de "+") y el "Nv +" despues. En el IE2 el cartel lleva el grado con el que se uso y la
+// subida se avisa despues. Por eso, al ver ese uso, la tabla de marcas sigue con los usos de
+// antes hasta que sale el cartel de esa tecnica (o 30 s), y entonces se lanza el "Nv +".
+struct RetencionGrado { uint32_t bloque; int slot; uint16_t tec; uint8_t usos_antes; uint32_t carteles; int espera; };
+std::vector<RetencionGrado> g_retenciones;
+constexpr uint32_t kDiagMarcaG = 0x023FB0E0u;   // = kDiagMarca (mas abajo): tecnica, jugador, nombre, contador
+int usos_para_marca(uint32_t bloque, int slot, int usos) {
+    for (const RetencionGrado& r : g_retenciones) if (r.bloque == bloque && r.slot == slot) return r.usos_antes;
+    return usos;
+}
 void ie1_niveles_tick() {
     static int activo = -1;
     if (!g_mem) return;
@@ -3212,10 +3427,20 @@ void ie1_niveles_tick() {
             for (int s = 0; s < 6; ++s)
                 if (n.tec[s] == p.tec[s] && n.usos[s] == uint8_t(p.usos[s] + 1) &&
                     ie1_grado(n.tec[s], n.usos[s]) > ie1_grado(n.tec[s], p.usos[s])) {
-                    avisos.push_back({b, 0});
-                    logf("[mods] niveles: %s sube de grado (tecnica 0x%X, %d usos)", ent::nombre(j).c_str(), n.tec[s], n.usos[s]);
+                    g_retenciones.push_back({b, s, n.tec[s], p.usos[s], g_mem->r32(kDiagMarcaG + 0xC), 0});
+                    logf("[mods] niveles: %s sube de grado (tecnica 0x%X, %d usos): el cartel de este uso sale con el grado de antes",
+                         ent::nombre(j).c_str(), n.tec[s], n.usos[s]);
                 }
         p = n;
+    }
+    // se suelta la retencion cuando sale el cartel de esa tecnica (o a los 30 s) y se avisa "Nv +"
+    for (size_t i = 0; i < g_retenciones.size();) {
+        RetencionGrado& r = g_retenciones[i];
+        const bool cartel = g_mem->r32(kDiagMarcaG + 0xC) != r.carteles && g_mem->r32(kDiagMarcaG) == r.tec;
+        if (cartel || ++r.espera > 1800) {
+            avisos.push_back({r.bloque, 0});
+            g_retenciones.erase(g_retenciones.begin() + std::ptrdiff_t(i));
+        } else ++i;
     }
     for (size_t i = 0; i < avisos.size();) {
         Aviso& a = avisos[i];
@@ -3381,7 +3606,7 @@ void ie1_marcas_tick() {
             const int tec = g_mem->r16(b + 0x98 + 2u * uint32_t(s));
             if (!tec) continue;
             t.push_back(unidad | uint32_t(tec) << 16);
-            t.push_back(uint32_t(ie1_marca(tec, g_mem->r8(b + 0xA4 + uint32_t(s)))));
+            t.push_back(uint32_t(ie1_marca(tec, usos_para_marca(b, s, g_mem->r8(b + 0xA4 + uint32_t(s))))));
         }
     }
     t.push_back(0); t.push_back(0);

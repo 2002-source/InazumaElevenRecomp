@@ -9,7 +9,7 @@
 #      un Python portable para las herramientas y las instrucciones.
 #
 #     bash /c/dev/ie1recomp/scripts/crear_distribucion.sh
-#  Resultado: D:\Juegos\Inazuma Eleven Recomp v1.1\  y un .zip al lado.
+#  Resultado: D:\Juegos\Inazuma Eleven Recomp v1.1.1\  y un .zip al lado.
 #  Las instrucciones salen de scripts/textos_port/: README (ingles), LEEME
 #  (espanol), LISEZMOI (frances), LIESMICH (aleman), LEGGIMI (italiano) y los
 #  de mods (MODS_*.txt).
@@ -19,7 +19,7 @@ set -euo pipefail
 IE1=/c/dev/ie1recomp
 NDS=/c/dev/ndsrecomp
 S=$IE1/scripts
-VERSION=1.1
+VERSION=1.1.1
 DEST="${DESTINO:-/d/Juegos/Inazuma Eleven Recomp v$VERSION}"
 PY_VER=3.12.7
 PY_ZIP="$IE1/run/python-$PY_VER-embed-amd64.zip"
