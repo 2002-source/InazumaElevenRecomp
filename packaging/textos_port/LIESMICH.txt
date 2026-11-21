@@ -1,0 +1,175 @@
+INAZUMA ELEVEN RECOMP - PC-PORT  v1.1
+=====================================
+Eine native PC-Version von Inazuma Eleven (Nintendo DS), erstellt durch
+statische Rekompilierung: Der Code des Spiels wurde in PC-Code übersetzt und
+läuft daher ohne Emulator mit voller Geschwindigkeit.
+Andere Sprachen: README.txt (English), LEEME.txt (Español),
+LISEZMOI.txt (Français), LEGGIMI.txt (Italiano).
+
+Dieses Paket enthält NICHT das Spiel. Du brauchst deine eigene ROM (eine
+Kopie deines eigenen Moduls).
+
+
+NEU IN v1.1
+-----------
+- Leistung: Die aufwendigsten Spezialtechniken laufen jetzt mit 57-60 FPS
+  statt 46-50 FPS. Der schnelle Modus ("Leistung") wird jetzt wirklich
+  genutzt, und die 3D-Zeichenbefehle werden viel schneller gesendet.
+- Französisch, Deutsch und Italienisch: Ziehe die französische, deutsche oder
+  italienische ROM auf die PREPARAR-Datei, und diese Sprache wird hinzugefügt
+  (Spieltexte und Menüs, und ihre Stimmen, falls diese Version eigene hat). Das Esc-Menü und der Launcher gibt es
+  auch in diesen Sprachen.
+- Esc > System > Lautstaerke: Lautstärke des Spiels lauter oder leiser (wird
+  gespeichert).
+- Esc > System > Neustart funktioniert jetzt immer: Das Spiel öffnet sich
+  von selbst neu, mit der gewählten Sprache und den Mods (vorher schloss es
+  sich beim dritten Neustart).
+- Das Fenster heißt "Inazuma Eleven Recomp" und zeigt die Version; Launcher
+  und Spiel haben das DS-Symbol des Spiels.
+- Neue Mods: IE2-Mechaniken (Technik-Stufen, Schuss wie in IE2, Schussblocks,
+  Talente, Mark kann nach der Geschichte das Team verlassen, doppelte
+  Erfahrung), Kraft bei Spezialtechniken, Sofortige Spielersuche, Filter für
+  Spezialtechniken und Farben nach Element. Siehe mods\LIESMICH.txt.
+- Freies Training: Mit Y steigt ein Spieler gegen Leidenschaft im Level auf;
+  mit X kehrt er kostenlos auf Level 1 zurück.
+
+
+1. WAS DU BRAUCHST
+------------------
+PFLICHT
+  Inazuma Eleven (Europa, Englisch)     Code YEEP
+  SHA-1: d55169c0b93d26b4037379d3b81a61b5404945e5
+
+OPTIONAL (jede fügt eine Sprache oder einen Mod hinzu)
+  Inazuma Eleven (Europa, Deutsch)      Code YEED  -> Deutsch
+  Inazuma Eleven (Europa, Spanisch)     Code YEES  -> Spanisch (Texte und Stimmen)
+  Inazuma Eleven (Europa, Französisch)  Code YEEF  -> Französisch
+  Inazuma Eleven (Europa, Italienisch)  Code YEEI  -> Italienisch
+  Inazuma Eleven (Japan)                Code YEEJ  -> Mod "Japanische Stimmen"
+Getestet mit diesen ROMs (SHA-1):
+  Deutsch      d3764abd90a5b69fd375e8d190e8e83a9e329e69
+  Spanisch     1977bf71a45a9ab654427f359eb7fbaa62d97ebe
+  Französisch  7fd6dfbd3821b17e0f8dbbf0bcea151c659d2b52
+  Italienisch  1244e4f4f527202d937d9ff92538bd675f2c6999
+
+Windows 10 oder 11 (64 Bit). Ein Controller ist optional (PS4/PS5/Xbox
+funktionieren).
+
+
+2. INSTALLIEREN (nur beim ersten Mal)
+-------------------------------------
+1. Entpacke diesen Ordner, wohin du willst (zum Beispiel D:\Spiele\Inazuma
+   Eleven).
+2. Ziehe deine ROM auf  "PREPARAR - arrastra aqui tus ROM.bat"
+   Du kannst mehrere auf einmal ablegen (englische + deutsche + ...).
+3. Warte, bis "Done" erscheint. Jede ROM wird selbst erkannt, und alles wird
+   in diesem Ordner erstellt. Deine ROMs werden nie verändert.
+
+Du kannst es jederzeit erneut ausführen, um eine weitere ROM hinzuzufügen. Die
+erste hinzugefügte Sprache wird zur Spielsprache; ändern kannst du sie unter
+Optionen oder im Esc-Menü.
+
+
+3. SPIELEN
+----------
+Doppelklick auf "Inazuma Eleven.exe" (der Launcher):
+  Spielen               startet das Spiel
+  Im Netzwerk spielen   mit einem anderen PC spielen (siehe Abschnitt 5)
+  Mods                  Mods an- oder ausschalten (Tab oder Rechtsklick auf
+                        einen Mod: was er macht)
+  Optionen              Sprache, Stimmen, Fenster/Vollbild, Größe,
+                        Anordnung, Skalierung, Modus, VSync und Steuerung
+  Beenden
+
+"Inazuma Eleven.bat" startet das Spiel direkt, ohne Launcher.
+
+Standardtasten
+  Pfeile = Steuerkreuz    Z = A    X = B    A = Y    S = X    Q = L    W = R
+  Enter = Start           Rücktaste = Select
+  Maus auf dem unteren Bildschirm = Touchscreen
+  Esc = Spielmenü
+(Auf einer QWERTZ-Tastatur liegt Z an anderer Stelle: ändere die Tasten unter
+Optionen > Steuerung.)
+Ein Controller funktioniert sofort. Die Tasten lassen sich unter Optionen >
+Steuerung oder im Esc-Menü ändern.
+
+
+4. DAS ESC-MENÜ (im Spiel)
+--------------------------
+Drücke jederzeit Esc. Es folgt der gewählten Textsprache.
+  Mods        jeden Mod an/aus (bei Auswahl steht, was er macht und wie man
+              ihn bekommt). Gilt nach dem Neustart.
+  System      Lautstaerke (0-100, wird gespeichert), Neustart (das Spiel öffnet
+              sich von selbst neu, z. B. um eine Sprache oder Mods
+              anzuwenden), Weiterspielen, Beenden.
+  Sprache     Sprache der Texte und Stimmen (gilt nach dem Neustart).
+  Zustände    Platz, Zustand speichern, Zustand laden (Schnellspeicher, 10
+              Plätze).
+  Anzeige     Fenster/Vollbild, Fenstergröße (480p/720p/1080p), Anordnung
+              (Bildschirme übereinander oder nebeneinander), Skalierung
+              (füllen oder scharf ganzzahlig), VSync.
+  Steuerung   die Taste für jede DS-Taste.
+  Eingabe     Mausempfindlichkeit.
+Dein normaler Spielstand (im Spiel gespeichert) ist datos\ie1_eur.sav.
+
+
+5. IM NETZWERK SPIELEN (lokales Drahtlos-Spiel zwischen zwei PCs) - experimentell
+-----------------------------------------------------------------------------------
+Der Drahtlos-Modus des Spiels (Spiele gegen einen Freund) funktioniert
+zwischen zwei PCs: im selben Heimnetz oder über das Internet mit einem
+kostenlosen "virtuellen LAN" wie Radmin VPN oder ZeroTier (beide treten
+demselben Netz bei).
+1. Launcher > Im Netzwerk spielen.
+2. Einer wählt Spieler 1 (Host), der andere Spieler 2 (Gast).
+3. "IP des anderen PCs": Gib die IP des ANDEREN Computers ein (Heimnetz:
+   ipconfig, "IPv4-Adresse"; Radmin VPN: die angezeigte IP, beginnt mit
+   26.). Port: 7030 bei beiden.
+4. Beide drücken "Verbinden und spielen". Wenn Windows wegen der Firewall
+   fragt, klicke auf Zulassen (private Netzwerke).
+5. Im Spiel den Drahtlos-Modus öffnen: einer erstellt den Raum, der andere
+   tritt bei.
+Über das Internet klappt es am besten mit niedrigem Ping (gleiches Land).
+
+
+6. MODS
+-------
+Lies mods\LIESMICH.txt. Kurz:
+  Freies Training                ein Trainer oben auf dem Turm (nach der
+                                 Geschichte) trainiert deine Spieler, lässt
+                                 sie im Level aufsteigen (Y) oder setzt sie
+                                 auf Level 1 zurück (X).
+  IE2-Mechaniken                 Technik-Stufen, Schuss und Fernschüsse wie in
+                                 IE2, Schussblocks, Talente, Mark kann nach
+                                 der Geschichte das Team verlassen, doppelte
+                                 Erfahrung bei Zufallsbegegnungen.
+  Kraft bei Spezialtechniken     die Kraft beider Spieler in den Szenen.
+  Sofortige Spielersuche         die Suchen von Celia und Nelly enden sofort.
+  Filter für Spezialtechniken    Technik-Notizbücher filtern und sortieren (X).
+  Farben nach Element            Technik-Namen in der Farbe ihres Elements.
+  Japanische Stimmen             originale japanische Stimmen (japanische ROM).
+
+
+7. WENN ETWAS NICHT FUNKTIONIERT
+--------------------------------
+- "Die ROM fehlt" / das Spiel startet nicht: Ziehe deine englische ROM
+  erneut auf die PREPARAR-Datei. Es muss genau die obige Version sein
+  (gleicher SHA-1).
+- Eine Sprache fehlt: Ziehe die ROM dieser Sprache auf die PREPARAR-Datei.
+- Ein Mod fehlt oder tut nichts: siehe mods\LIESMICH.txt.
+- Alles andere: Schicke datos\ultima_sesion.log an die Person, die dir hilft.
+
+
+8. DATEIEN
+----------
+  datos\ie1_eur.sav        dein Spielstand
+  datos\estados\           Schnellspeicher
+  datos\ultima_sesion.log  Protokoll der letzten Sitzung
+  mods\                    die Mods und mods.cfg (aktive Mods)
+  idiomas\                 Sprachpakete aus deinen ROMs
+  licencias\               Lizenzen und wo der Quellcode ist
+
+Dieser Port enthält keine ROM. Inazuma Eleven ist eine Marke von LEVEL-5 Inc.
+Nicht kommerzielles Fanprojekt.
+Erstellt von Dosmildos (github.com/2002-source/InazumaElevenRecomp), mit Hilfe
+von Claude (Anthropic). Basiert auf ndsrecomp (mstan / RetroPortingToolkit)
+und melonDS.

@@ -5,7 +5,9 @@ llegar a la entrada de las rutinas que tienen HLE en Inazuma Eleven, para que
 el dispatcher aplique el reemplazo nativo (si no, el codigo flat ejecutaria la
 rutina original y el HLE nunca se usaria dentro de una region).
 Entradas: 0x02011CC0 (lectura del cartucho), 0x02009BE0 (LZ),
-          0x02011B54 (ID del chip), 0x02000950 (descompresion de overlays).
+          0x02011B54 (ID del chip), 0x02000950 (descompresion de overlays),
+          0x020091C8 (envio de comandos 3D, MI_CpuSend32),
+          0x0202B608 (funcion de comandos 3D del motor).
 La salida depende de g_ie1_flat_hle_exits (definida por el HLE del runner).
 Requiere parche_flat_mcr.py. Despues: bash scripts/perf.sh
 """
@@ -13,14 +15,17 @@ import sys
 PATH = "C:/dev/ndsrecomp/recompiler/src/flat_codegen.cpp"
 s = open(PATH, encoding="utf-8", newline="").read()
 viejo_v1 = "pc == 0x02011CC0u || pc == 0x02009BE0u || pc == 0x02011B54u;"
-nuevo_v2 = "pc == 0x02011CC0u || pc == 0x02009BE0u || pc == 0x02011B54u || pc == 0x02000950u;"
+viejo_v2 = "pc == 0x02011CC0u || pc == 0x02009BE0u || pc == 0x02011B54u || pc == 0x02000950u;"
+viejo_v3 = "pc == 0x02011CC0u || pc == 0x02009BE0u || pc == 0x02011B54u || pc == 0x02000950u || pc == 0x020091C8u;"
+nuevo_v2 = "pc == 0x02011CC0u || pc == 0x02009BE0u || pc == 0x02011B54u || pc == 0x02000950u || pc == 0x020091C8u || pc == 0x0202B608u;"
 if "IE1_FLAT_HLE" in s:
     if nuevo_v2 in s:
         print("El parche ya estaba aplicado.")
-    elif viejo_v1 in s:
-        s = s.replace(viejo_v1, nuevo_v2)
+    elif viejo_v3 in s or viejo_v2 in s or viejo_v1 in s:
+        v = viejo_v3 if viejo_v3 in s else (viejo_v2 if viejo_v2 in s else viejo_v1)
+        s = s.replace(v, nuevo_v2)
         open(PATH, "w", encoding="utf-8", newline="").write(s)
-        print("Parche actualizado: anadida la descompresion de overlays (0x02000950).")
+        print("Parche actualizado: las regiones flat tambien salen en la funcion de comandos 3D (0x0202B608).")
     else:
         sys.exit("flat_codegen.cpp tiene una version desconocida del parche.")
     sys.exit(0)

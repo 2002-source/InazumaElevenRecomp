@@ -1,4 +1,4 @@
-# Inazuma Eleven - Port para PC (InazumaElevenRecomp)
+# Inazuma Eleven Recomp - Port para PC (InazumaElevenRecomp)
 
 <p align="center">
   <img src="docs/img/Supertecnica.png" width="49%" alt="Supertécnica">
@@ -26,8 +26,34 @@ firmware, partida ni código generado a partir de la ROM.
    soltar varias a la vez). Reconoce cada ROM y prepara todo.
 3. Abre **`Inazuma Eleven.exe`** y pulsa **Jugar**.
 
-Las instrucciones completas para jugar vienen en la descarga (`LEEME.txt` /
-`README.txt`).
+Las instrucciones completas para jugar vienen en la descarga, en cinco idiomas
+(`LEEME.txt`, `README.txt`, `LISEZMOI.txt`, `LIESMICH.txt`, `LEGGIMI.txt`).
+
+## Novedades de la v1.1
+
+- **Rendimiento:** las supertécnicas más pesadas (Regate Múltiple, Ruptura
+  Relámpago, Triángulo Z...) pasan de 46-50 FPS a **57-60 FPS** en un Ryzen 5
+  2600 + GTX 1650. Ahora sí se usa el modelo de ejecución rápido
+  ("rendimiento") y el envío de comandos 3D
+  del juego se hace de forma nativa: su función de listas de comandos
+  (`0x0202B608`) y el bucle de copia al GXFIFO (`0x020091C8`) funcionan como
+  código de alto nivel que escribe directamente en el motor 3D, en lugar de
+  pasar palabra a palabra por el manejador de E/S.
+- Paquetes de idioma en **francés, alemán e italiano**, creados por el
+  preparador con tus propias ROM (textos del juego, textos de los menús del
+  código y sus voces si esa versión las tiene propias). El menú Esc y el lanzador también están traducidos.
+- **Volumen** en Esc > Sistema (se recuerda entre sesiones).
+- **Reiniciar** funciona siempre: el lanzador, que espera oculto, vuelve a
+  abrir el juego con el idioma y los mods elegidos (la v1.0 abría cada proceso
+  nuevo desde el anterior y se cerraba al tercer reinicio).
+- La ventana se llama "Inazuma Eleven Recomp - FPS - v1.1"; el lanzador y el
+  juego usan el icono de la DS sacado de tu ROM.
+- Mods nuevos: **Mecánicas IE2** (niveles de supertécnicas, tiro del IE2,
+  bloqueos de tiro, talentos, Mark se puede quitar del equipo tras la
+  historia, experiencia doble), **Valor en las supertécnicas**, **Ojeo
+  instantáneo**, **Filtros de supertécnicas** y **Colores por afinidad**.
+- Entrenamiento libre: sube de nivel a un jugador pagando Pasión (Y) o
+  devuélvelo gratis al nivel 1 (X).
 
 ## ROM necesaria
 
@@ -42,29 +68,44 @@ ROM opcionales (el preparador las detecta):
 | ROM | código | añade |
 | --- | --- | --- |
 | Inazuma Eleven (Europa, español) | `YEES` | Textos y voces en español |
-| Inazuma Eleven (Japón) | `YEEJ` | Mod de voces japonesas (cinemáticas) |
+| Inazuma Eleven (Europa, francés) | `YEEF` | Textos en francés |
+| Inazuma Eleven (Europa, alemán) | `YEED` | Textos en alemán |
+| Inazuma Eleven (Europa, italiano) | `YEEI` | Textos en italiano |
+| Inazuma Eleven (Japón) | `YEEJ` | Mod de voces japonesas |
 
 ## Qué funciona
 
-- El juego completo con el runner de ndsrecomp, a 60 FPS (modo rendimiento).
+- El juego completo con el runner de ndsrecomp, a 60 FPS (57-60 en las
+  supertécnicas más pesadas).
 - Lanzador: jugar, mods (con su ficha de información), opciones (idioma,
   voces, ventana, tamaño, disposición, escalado, VSync y controles) y **juego
   en red**.
-- Menú Esc dentro del juego en español o inglés (pantalla, idioma, teclas,
-  estados, mods, reiniciar).
+- Menú Esc dentro del juego en español, inglés, francés, alemán o italiano
+  (pantalla, idioma, teclas, estados, mods, volumen, reiniciar).
 - **Juego inalámbrico entre dos PC** (misma red, o por internet con una red
   local virtual como Radmin VPN o ZeroTier).
-- Paquetes de idioma creados con tus propias ROM (textos, voces y textos del
-  código en español; voces japonesas).
+- Paquetes de idioma creados con tus propias ROM (textos y textos del código
+  en español, francés, alemán e italiano; voces en español; voces japonesas).
 
 <p align="center"><img src="docs/img/Pachanga.png" width="60%" alt="Pachanga"></p>
 
 ## Mods incluidos
 
-- **Entrenamiento libre + NPC entrenador**: al terminar la historia, un
-  entrenador en la plataforma de la Torre te deja entrenar a tus jugadores.
-- **Niveles de supertécnicas**: las supertécnicas suben de nivel con el uso,
-  como en el Inazuma Eleven 2 (aviso "Nv +" y marcas junto al nombre).
+- **Entrenamiento libre**: al terminar la historia, un entrenador en lo alto
+  de la Torre te deja entrenar a tus jugadores, subirlos de nivel pagando
+  Pasión o devolverlos al nivel 1.
+- **Mecánicas IE2**: las supertécnicas suben de nivel con el uso (aviso
+  "Nv +" y marcas), el botón de tiro y los tiros largos del IE2, bloqueos de
+  tiro, talentos, Mark se puede quitar del equipo tras la historia y
+  experiencia doble si ganas un encuentro por 5 o más goles sin encajar. Todo
+  usa código que el juego ya tenía, sin activar.
+- **Valor en las supertécnicas**: el valor total de los dos jugadores en las
+  escenas de las supertécnicas, con el ganador en rojo.
+- **Ojeo instantáneo**: las búsquedas de Celia y Nelly terminan al momento.
+- **Filtros de supertécnicas**: filtra y ordena los cuadernos de
+  supertécnicas.
+- **Colores por afinidad**: los nombres de las técnicas con el color de su
+  afinidad, como en Victory Road.
 - **Voces japonesas** (necesita la ROM japonesa).
 
 ## Limitaciones conocidas
@@ -73,7 +114,7 @@ ROM opcionales (el preparador las detecta):
   partida (`datos\ie1_eur.sav`).
 - El juego en red se ha probado con dos copias en el mismo PC y por la red de
   casa; por internet depende del ping (mejor con latencia baja).
-- Solo se admite exactamente la ROM de arriba.
+- Como base solo se admite exactamente la ROM inglesa de arriba.
 
 ## Compilar desde el código
 

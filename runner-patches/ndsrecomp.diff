@@ -1,3 +1,31 @@
+diff --git a/recompiler/src/flat_codegen.cpp b/recompiler/src/flat_codegen.cpp
+index 77447b7..1c7c767 100644
+--- a/recompiler/src/flat_codegen.cpp
++++ b/recompiler/src/flat_codegen.cpp
+@@ -79,7 +79,7 @@ bool admitted(const Instr& in,const std::string& body) {
+ // IE1_FLAT_MCR: mantenimiento de la cache de datos del CP15 = NOP en regiones flat
+ // IE1_FLAT_HLE: entradas de rutinas con HLE de Inazuma Eleven (parche_flat_hle.py)
+ bool ie1_hle_entry(uint32_t pc) {
+-    return pc == 0x02011CC0u || pc == 0x02009BE0u || pc == 0x02011B54u || pc == 0x02000950u;
++    return pc == 0x02011CC0u || pc == 0x02009BE0u || pc == 0x02011B54u || pc == 0x02000950u || pc == 0x020091C8u || pc == 0x0202B608u;
+ }
+ bool ie1_dcache_maintenance(uint32_t raw) {
+     if ((raw >> 28) != 0xEu) return false;                 // solo incondicional
+diff --git a/runner/CMakeLists.txt b/runner/CMakeLists.txt
+index 4e5af02..4a3f463 100644
+--- a/runner/CMakeLists.txt
++++ b/runner/CMakeLists.txt
+@@ -656,6 +656,10 @@ if(NDS_IE1_CARD_IMPLEMENTATION STREQUAL "HLE")
+ endif()
+ message(STATUS "IE1 card implementation: ${NDS_IE1_CARD_IMPLEMENTATION}")
+ target_sources(nds_runner PRIVATE src/ie1_idiomas.cpp)  # IE1_IDIOMAS
++if(WIN32)  # IE1_ICONO: icono del .exe (el de la ROM)
++    enable_language(RC)
++    target_sources(nds_runner PRIVATE src/ie1_icono.rc)
++endif()
+ # IE1_CLANG_PGO: PGO con Clang solo para el nucleo del runner (parche_pgo_clang.py)
+ set(IE1_CLANG_PGO "OFF" CACHE STRING "Clang PGO del runner: OFF, GENERATE o USE")
+ set(IE1_CLANG_PGO_FILE "" CACHE FILEPATH "Perfil .profdata para IE1_CLANG_PGO=USE")
 diff --git a/runner/src/arm9_native.cpp b/runner/src/arm9_native.cpp
 index 3c44ba8..67901e7 100644
 --- a/runner/src/arm9_native.cpp
@@ -37,8 +65,38 @@ index 3c44ba8..67901e7 100644
      }
      runtime_tick(0);
      return true;
+diff --git a/runner/src/arm9_native_options.h b/runner/src/arm9_native_options.h
+index 572c82e..14f9d91 100644
+--- a/runner/src/arm9_native_options.h
++++ b/runner/src/arm9_native_options.h
+@@ -2,6 +2,7 @@
+ #include <cstdint>
+ #include <cstdlib>
+ #include <cstring>
++#include <cstdio>  // parche_ventanas_diag.py
+ 
+ // Process-fixed investigation switches. Default builds and the faithful model
+ // retain their original behavior. The optional translator is Windows/x64 gated.
+@@ -16,7 +17,17 @@ inline const NdsNativeOptions& nds_native_options() {
+         o.reads=on("NDS_ARM9_DIRECT_READS");o.blocks=on("NDS_ARM9_LONG_BLOCKS");
+         o.data=on("NDS_ARM9_DATA_HANDOFFS");o.gx=on("NDS_ARM9_GX_BATCH");
+         o.events=on("NDS_ARM9_EVENT_WINDOWS");
++#else
++        // Parche local (parche_ventanas_eventos.py): las ventanas de eventos del
++        // planificador tambien sin el JIT (bancos flat de Inazuma Eleven).
++        {const char* v=std::getenv("NDS_ARM9_EVENT_WINDOWS");o.events=v&&std::strcmp(v,"1")==0;}
+ #endif
++        {   // Parche local (parche_ventanas_diag.py): estado de las rondas largas
++            const char* v=std::getenv("NDS_ARM9_EVENT_WINDOWS");
++            std::fprintf(stderr,"[ventanas] NDS_ARM9_EVENT_WINDOWS=%s -> rondas largas %s\n",
++                         v?v:"(sin definir)",o.events?"encendidas":"apagadas");
++            std::fflush(stderr);
++        }
+         return o;
+     }();
+     return options;
 diff --git a/runner/src/frontend.cpp b/runner/src/frontend.cpp
-index 0e4388d..10adb83 100644
+index 0e4388d..973b413 100644
 --- a/runner/src/frontend.cpp
 +++ b/runner/src/frontend.cpp
 @@ -1,3 +1,5 @@
@@ -112,7 +170,14 @@ index 0e4388d..10adb83 100644
      // KEYINPUT/EXTKEYIN are active-low. This layout follows the common DS
      // emulator convention: Z/X = A/B, A/S = Y/X, Q/W = L/R.
      switch (key) {
-@@ -998,6 +1048,15 @@ void ie1_cfg_cargar();
+@@ -994,17 +1044,30 @@ void ie1_lang_init() {
+ extern "C" void ie1_reiniciar_programa();
+ bool g_ie1_req_restart = false;
+ constexpr const char* kIe1RestartKey = "ie1.restart";
++constexpr const char* kIe1VolumeKey = "ie1.volume";  // IE1_VOLUMEN
++int g_ie1_volumen = 100;              // 0..100
++bool g_ie1_req_volumen = true;        // aplicarlo al stream de audio
+ void ie1_cfg_cargar();
  void ie1_cfg_guardar_si_cambia();
  // IE1_MODS_MENU: seccion Mods (parche_menu_mods.py)
  extern "C" int ie1_mods_hay();
@@ -123,12 +188,23 @@ index 0e4388d..10adb83 100644
 +extern "C" void ie1_overlay_alternar();
 +extern "C" void ie1_overlay_teclas(uint16_t pulsados);
 +extern "C" void ie1_overlay_toque(int x, int y, int abajo);  // IE1_OVERLAY_TACTIL
++extern "C" int ie1_overlay_vigilar_teclas(uint16_t pulsados);  // IE1_OVERLAY_VIGILAR
++extern "C" int ie1_overlay_vigilar_toque(int x, int y, int abajo);
 +extern "C" int ie1_overlay_dibujar(const uint32_t*, int, const uint32_t*, int,
 +                                   const uint32_t**, const uint32_t**);
  extern "C" int ie1_mods_num();
  extern "C" const char* ie1_mods_nombre(int i);
  extern "C" int ie1_mods_activo(int i);
-@@ -1044,7 +1103,239 @@ bool ie1_key(const RecompRuntimeUiItem* item, const char* key) {
+ extern "C" void ie1_mods_cambiar(int i, int activo);
+-constexpr int kIe1ModSlots = 6;
+-const char* const kIe1ModKeys[kIe1ModSlots] = {"ie1.mod0", "ie1.mod1", "ie1.mod2",
+-                                               "ie1.mod3", "ie1.mod4", "ie1.mod5"};
++constexpr int kIe1ModSlots = 12;  // IE1_MODS12
++const char* const kIe1ModKeys[kIe1ModSlots] = {"ie1.mod0", "ie1.mod1", "ie1.mod2", "ie1.mod3", "ie1.mod4", "ie1.mod5", "ie1.mod6", "ie1.mod7", "ie1.mod8", "ie1.mod9", "ie1.mod10", "ie1.mod11"};
+ const char* const kIe1OnOffChoices[] = {"Desactivado", "Activado"};
+ bool g_ie1_req_mods = false;
+ int ie1_mod_slot(const RecompRuntimeUiItem* item) {
+@@ -1044,10 +1107,370 @@ bool ie1_key(const RecompRuntimeUiItem* item, const char* key) {
      return item && item->key && std::strcmp(item->key, key) == 0;
  }
  
@@ -245,6 +321,7 @@ index 0e4388d..10adb83 100644
 +        {"Close the runner.", "Cierra el juego.", "Close the game."},
 +        {"Audio", "Audio", "Audio"},
 +        {"Volume", "Volumen", "Volume"},
++        {"Volumen del juego (0 = sin sonido, 100 = normal). Se guarda para la proxima vez.", "Volumen del juego (0 = sin sonido, 100 = normal). Se guarda para la proxima vez.", "Game volume (0 = no sound, 100 = normal). It is kept for next time."},  // IE1_VOLUMEN
 +        {"Desactivado", "Desactivado", "Off"},
 +        {"Activado", "Activado", "On"},
 +        {"Ventana", "Ventana", "Window"},
@@ -265,6 +342,113 @@ index 0e4388d..10adb83 100644
 +        {"A / Enter", "A / Intro", "A / Enter"},
 +        {"B / Backspace", "B / Retroceso", "B / Backspace"},
 +};
++// IE1_MENU_5IDIOMAS: frances, aleman e italiano (parche_menu_5idiomas.py)
++int g_ie1_menu_lang = 0;          // 0 en, 1 es, 2 fr, 3 de, 4 it
++struct Ie1Traduccion3 { const char* en; const char* fr; const char* de; const char* it; };
++const Ie1Traduccion3 kIe1Traducciones3[] = {
++        {"UP/DOWN SELECT  LEFT/RIGHT CHANGE  ENTER ACCEPT", "HAUT/BAS CHOISIR  GAUCHE/DROITE CHANGER  ENTREE VALIDER", "HOCH/RUNTER WAEHLEN  LINKS/RECHTS AENDERN  ENTER OK", "SU/GIU SCEGLI  SIN/DES CAMBIA  INVIO CONFERMA"},
++        {"ENTER OPEN  ESC BACK", "ENTREE OUVRIR  ECHAP RETOUR", "ENTER OEFFNEN  ESC ZURUECK", "INVIO APRI  ESC INDIETRO"},
++        {"Press again to confirm", "Appuie encore pour confirmer", "Zum Bestaetigen erneut druecken", "Premi di nuovo per confermare"},
++        {"Fill", "Remplir", "Fuellen", "Riempi"},
++        {"Integer (sharp)", "Entier (net)", "Ganzzahlig (scharf)", "Intero (nitido)"},
++        {"Off", "Non", "Aus", "No"},
++        {"On", "Oui", "An", "Si"},
++        {"Spanish", "Espagnol", "Spanisch", "Spagnolo"},
++        {"English", "Anglais", "Englisch", "Inglese"},
++        {"Japanese", "Japonais", "Japanisch", "Giapponese"},
++        {"French", "Francais", "Franzoesisch", "Francese"},
++        {"German", "Allemand", "Deutsch", "Tedesco"},
++        {"Italian", "Italien", "Italienisch", "Italiano"},
++        {"English (original)", "Anglais (original)", "Englisch (Original)", "Inglese (originale)"},
++        {"Spanish (original)", "Espagnol (original)", "Spanisch (Original)", "Spagnolo (originale)"},
++        {"Settings", "Options", "Einstellungen", "Impostazioni"},
++        {"A / Enter", "A / Entree", "A / Enter", "A / Invio"},
++        {"B / Backspace", "B / Retour arriere", "B / Ruecktaste", "B / Backspace"},
++        {"Mouse sensitivity", "Sensibilite de la souris", "Mausempfindlichkeit", "Sensibilita del mouse"},
++        {"Mouse speed.", "Vitesse de la souris.", "Mausgeschwindigkeit.", "Velocita del mouse."},
++        {"Mouse", "Souris", "Maus", "Mouse"},
++        {"Enter", "Entree", "Enter", "Invio"},
++        {"Backspace", "Retour arriere", "Ruecktaste", "Backspace"},
++        {"Space", "Espace", "Leertaste", "Spazio"},
++        {"Tab", "Tab", "Tab", "Tab"},
++        {"Up", "Haut", "Hoch", "Su"},
++        {"Down", "Bas", "Runter", "Giu"},
++        {"Left", "Gauche", "Links", "Sinistra"},
++        {"Right", "Droite", "Rechts", "Destra"},
++        {"Keypad Enter", "Entree (pave num.)", "Enter (Ziffernblock)", "Invio (tast. num.)"},
++        {"Right Shift", "Maj droite", "Umschalt rechts", "Maiusc destro"},
++        {"Right Ctrl", "Ctrl droit", "Strg rechts", "Ctrl destro"},
++        {"Left Alt", "Alt gauche", "Alt links", "Alt sinistro"},
++        {"Home", "Debut", "Pos1", "Home"},
++        {"End", "Fin", "Ende", "Fine"},
++        {"Page Up", "Page prec.", "Bild hoch", "Pag su"},
++        {"Page Down", "Page suiv.", "Bild runter", "Pag giu"},
++        {"Insert", "Inser", "Einfg", "Ins"},
++        {"Delete", "Suppr", "Entf", "Canc"},
++        {"Mods", "Mods", "Mods", "Mod"},
++        {"Turns the mod on or off. Applied on restart (System > Restart).", "Active ou desactive le mod. S'applique au redemarrage (Systeme > Redemarrer).", "Schaltet den Mod an oder aus. Gilt nach dem Neustart (System > Neustart).", "Attiva o disattiva la mod. Si applica al riavvio (Sistema > Riavvia)."},
++        {"System", "Systeme", "System", "Sistema"},
++        {"Restart", "Redemarrer", "Neustart", "Riavvia"},
++        {"Closes and reopens the game (for example, to apply the language).", "Ferme et rouvre le jeu (par exemple, pour appliquer la langue).", "Schliesst das Spiel und startet es neu (z. B. um die Sprache anzuwenden).", "Chiude e riapre il gioco (per esempio, per applicare la lingua)."},
++        {"Language", "Langue", "Sprache", "Lingua"},
++        {"Text", "Textes", "Texte", "Testi"},
++        {"Language of texts and menus. Applied when the game restarts.", "Langue des textes et des menus. S'applique au redemarrage du jeu.", "Sprache der Texte und Menues. Gilt nach dem Neustart des Spiels.", "Lingua di testi e menu. Si applica al riavvio del gioco."},
++        {"Voices", "Voix", "Stimmen", "Voci"},
++        {"Language of the voices. Applied when the game restarts.", "Langue des voix. S'applique au redemarrage du jeu.", "Sprache der Stimmen. Gilt nach dem Neustart des Spiels.", "Lingua delle voci. Si applica al riavvio del gioco."},
++        {"Save states", "Sauvegardes rapides", "Speicherstaende", "Salvataggi rapidi"},
++        {"Slot", "Emplacement", "Platz", "Slot"},
++        {"Slot used by Save and Load state.", "Emplacement utilise pour sauvegarder et charger.", "Platz fuer Speichern und Laden.", "Slot usato da Salva e Carica stato."},
++        {"Save state", "Sauvegarder", "Zustand speichern", "Salva stato"},
++        {"Saves the game to the selected slot.", "Sauvegarde la partie dans l'emplacement choisi.", "Speichert das Spiel im gewaehlten Platz.", "Salva la partita nello slot scelto."},
++        {"Load state", "Charger", "Zustand laden", "Carica stato"},
++        {"Loads the game from the selected slot.", "Charge la partie de l'emplacement choisi.", "Laedt das Spiel aus dem gewaehlten Platz.", "Carica la partita dallo slot scelto."},
++        {"Display", "Affichage", "Anzeige", "Schermo"},
++        {"Mode", "Mode", "Modus", "Modalita"},
++        {"Window or fullscreen.", "Fenetre ou plein ecran.", "Fenster oder Vollbild.", "Finestra o schermo intero."},
++        {"Window size", "Taille de la fenetre", "Fenstergroesse", "Dimensione finestra"},
++        {"Size of the window in windowed mode.", "Taille de la fenetre en mode fenetre.", "Groesse des Fensters im Fenstermodus.", "Dimensione della finestra in modalita finestra."},
++        {"Layout", "Disposition", "Anordnung", "Disposizione"},
++        {"Screens stacked or side by side.", "Ecrans l'un sur l'autre ou cote a cote.", "Bildschirme uebereinander oder nebeneinander.", "Schermi uno sopra l'altro o affiancati."},
++        {"Scaling", "Mise a l'echelle", "Skalierung", "Scala"},
++        {"Fill the window, or integer scaling without distorting pixels.", "Remplir la fenetre, ou echelle entiere sans deformer les pixels.", "Fenster fuellen oder ganzzahlig skalieren, ohne Pixel zu verzerren.", "Riempi la finestra, o scala intera senza deformare i pixel."},
++        {"VSync", "VSync", "VSync", "VSync"},
++        {"Syncs the picture with the monitor (avoids tearing).", "Synchronise l'image avec l'ecran (evite les dechirures).", "Synchronisiert das Bild mit dem Monitor (verhindert Tearing).", "Sincronizza l'immagine con il monitor (evita il tearing)."},
++        {"Controls", "Commandes", "Steuerung", "Comandi"},
++        {"Input", "Entree", "Eingabe", "Input"},
++        {"Resume game", "Reprendre", "Weiterspielen", "Riprendi"},
++        {"Close settings and return to the game.", "Ferme le menu et revient au jeu.", "Schliesst das Menue und kehrt zum Spiel zurueck.", "Chiude il menu e torna al gioco."},
++        {"Quit", "Quitter", "Beenden", "Esci"},
++        {"Close the game.", "Ferme le jeu.", "Beendet das Spiel.", "Chiude il gioco."},
++        {"Audio", "Audio", "Audio", "Audio"},
++        {"Volume", "Volume", "Lautstaerke", "Volume"},
++        {"Game volume (0 = no sound, 100 = normal). It is kept for next time.", "Volume du jeu (0 = sans son, 100 = normal). Il est garde pour la prochaine fois.", "Lautstaerke des Spiels (0 = kein Ton, 100 = normal). Wird fuer das naechste Mal gespeichert.", "Volume del gioco (0 = senza audio, 100 = normale). Viene ricordato per la prossima volta."},  // IE1_VOLUMEN
++        {"Window", "Fenetre", "Fenster", "Finestra"},
++        {"Fullscreen", "Plein ecran", "Vollbild", "Schermo intero"},
++        {"Vertical", "Vertical", "Vertikal", "Verticale"},
++        {"Horizontal", "Horizontal", "Horizontal", "Orizzontale"},
++        {"Keypad 0", "0 (pave num.)", "0 (Ziffernblock)", "0 (tast. num.)"},
++        {"Keypad 1", "1 (pave num.)", "1 (Ziffernblock)", "1 (tast. num.)"},
++        {"Keypad 2", "2 (pave num.)", "2 (Ziffernblock)", "2 (tast. num.)"},
++        {"Keypad 3", "3 (pave num.)", "3 (Ziffernblock)", "3 (tast. num.)"},
++        {"Keypad 4", "4 (pave num.)", "4 (Ziffernblock)", "4 (tast. num.)"},
++        {"Keypad 5", "5 (pave num.)", "5 (Ziffernblock)", "5 (tast. num.)"},
++        {"Keypad 6", "6 (pave num.)", "6 (Ziffernblock)", "6 (tast. num.)"},
++        {"Keypad 7", "7 (pave num.)", "7 (Ziffernblock)", "7 (tast. num.)"},
++        {"Keypad 8", "8 (pave num.)", "8 (Ziffernblock)", "8 (tast. num.)"},
++        {"Keypad 9", "9 (pave num.)", "9 (Ziffernblock)", "9 (tast. num.)"},
++        {"Key for the A button.", "Touche du bouton A.", "Taste fuer den A-Knopf.", "Tasto del pulsante A."},
++        {"Key for the B button.", "Touche du bouton B.", "Taste fuer den B-Knopf.", "Tasto del pulsante B."},
++        {"Key for the X button.", "Touche du bouton X.", "Taste fuer den X-Knopf.", "Tasto del pulsante X."},
++        {"Key for the Y button.", "Touche du bouton Y.", "Taste fuer den Y-Knopf.", "Tasto del pulsante Y."},
++        {"Key for the L button.", "Touche du bouton L.", "Taste fuer den L-Knopf.", "Tasto del pulsante L."},
++        {"Key for the R button.", "Touche du bouton R.", "Taste fuer den R-Knopf.", "Tasto del pulsante R."},
++        {"Key for the Start button.", "Touche du bouton Start.", "Taste fuer den Start-Knopf.", "Tasto del pulsante Start."},
++        {"Key for the Select button.", "Touche du bouton Select.", "Taste fuer den Select-Knopf.", "Tasto del pulsante Select."},
++        {"Key for D-pad up.", "Touche de la croix : haut.", "Taste fuer das Steuerkreuz: hoch.", "Tasto della croce: su."},
++        {"Key for D-pad down.", "Touche de la croix : bas.", "Taste fuer das Steuerkreuz: runter.", "Tasto della croce: giu."},
++        {"Key for D-pad left.", "Touche de la croix : gauche.", "Taste fuer das Steuerkreuz: links.", "Tasto della croce: sinistra."},
++        {"Key for D-pad right.", "Touche de la croix : droite.", "Taste fuer das Steuerkreuz: rechts.", "Tasto della croce: destra."},
++};
 +bool ie1_menu_en_espanol() {
 +    static int es = -1;
 +    if (es < 0) {
@@ -280,14 +464,23 @@ index 0e4388d..10adb83 100644
 +            std::fclose(f);
 +        }
 +        es = idioma == "es" ? 1 : 0;
++        g_ie1_menu_lang = idioma == "es" ? 1 : idioma == "fr" ? 2 : (idioma == "de" || idioma == "ge") ? 3 : idioma == "it" ? 4 : 0;
 +    }
 +    return es == 1;
++}
++int ie1_menu_idioma() { ie1_menu_en_espanol(); return g_ie1_menu_lang; }
++const char* ie1_tr3(const char* en) {        // ingles -> frances, aleman o italiano
++    const int l = ie1_menu_idioma();
++    if (l < 2 || !en) return en;
++    for (const auto& x : kIe1Traducciones3)
++        if (!std::strcmp(en, x.en)) return l == 2 ? x.fr : l == 3 ? x.de : x.it;
++    return en;
 +}
 +const char* ie1_tr(const char* t) {
 +    if (!t) return t;
 +    const bool es = ie1_menu_en_espanol();
 +    for (const auto& x : kIe1Traducciones)
-+        if (!std::strcmp(t, x.original)) return es ? x.es : x.en;
++        if (!std::strcmp(t, x.original)) return es ? x.es : ie1_tr3(x.en);
 +    static std::vector<std::string> avisados;
 +    if (*t && std::find(avisados.begin(), avisados.end(), t) == avisados.end()) {
 +        avisados.push_back(t);
@@ -308,6 +501,9 @@ index 0e4388d..10adb83 100644
 +        std::string base, en, l;
 +        char linea[1024];
 +        const std::string k = clave, ken = k + "_en";
++        static const char* const kSufijo[5] = {"", "", "_fr", "_de", "_it"};  // IE1_MENU_5IDIOMAS
++        const std::string kloc = k + kSufijo[ie1_menu_idioma()];
++        std::string loc;
 +        while (std::fgets(linea, sizeof linea, f)) {
 +            l = linea;
 +            while (!l.empty() && (l.back() == '\n' || l.back() == '\r')) l.pop_back();
@@ -315,22 +511,29 @@ index 0e4388d..10adb83 100644
 +            if (eq == std::string::npos) continue;
 +            if (l.compare(0, eq, k) == 0 && eq == k.size()) base = l.substr(eq + 1);
 +            if (l.compare(0, eq, ken) == 0 && eq == ken.size()) en = l.substr(eq + 1);
++            if (ie1_menu_idioma() >= 2 && l.compare(0, eq, kloc) == 0 && eq == kloc.size()) loc = l.substr(eq + 1);
 +        }
 +        std::fclose(f);
++        if (!loc.empty()) return loc;
 +        return (!ie1_menu_en_espanol() && !en.empty()) ? en : base;
 +    }
 +    return {};
 +}
 +const char* ie1_mod_nombre_ui(int i, const char* respaldo) {
-+    static std::string nombres[8];
-+    if (i < 0 || i >= 8) return respaldo;
++    static std::string nombres[16];
++    if (i < 0 || i >= 16) return respaldo;
 +    nombres[i] = ie1_mod_campo(i, "nombre");
 +    return nombres[i].empty() ? respaldo : nombres[i].c_str();
 +}
-+const char* ie1_mod_descripcion(int i) {   // IE1_MENU_INFO_MODS2: una sola linea
++const char* ie1_mod_descripcion(int i) {   // IE1_MENU_INFO_MODS2: una sola linea (IE1_MENU_5IDIOMAS)
 +    (void)i;
-+    return ie1_menu_en_espanol() ? "Activar o desactivar (al reiniciar). Info: lanzador, Tab."
-+                                 : "Turn on or off (on restart). Info: launcher, Tab.";
++    static const char* const k[5] = {
++        "Turn on or off (on restart). Info: launcher, Tab.",
++        "Activar o desactivar (al reiniciar). Info: lanzador, Tab.",
++        "Activer ou desactiver (au redemarrage). Infos : lanceur, Tab.",
++        "An- oder ausschalten (nach Neustart). Infos: Starter, Tab.",
++        "Attiva o disattiva (al riavvio). Info: launcher, Tab."};
++    return k[ie1_menu_idioma()];
 +}
 +
 +const RecompRuntimeUiItem* ie1_traducir_menu(const RecompRuntimeUiItem* items, size_t n) {
@@ -368,7 +571,11 @@ index 0e4388d..10adb83 100644
      if (const int m = ie1_mod_slot(item); m >= 0) { *value = ie1_mods_activo(m); return 1; }  // IE1_MODS_MENU
      if (ie1_key(item, kIe1TxtKey)) { ie1_lang_init(); *value = g_ie1_lang_txt; return 1; }  // IE1_IDIOMAS_MENU
      if (ie1_key(item, kIe1VozKey)) { ie1_lang_init(); *value = g_ie1_lang_voz; return 1; }
-@@ -1057,6 +1348,18 @@ int ie1_menu_get(const RecompRuntimeUiItem* item, int* value) {
++    if (ie1_key(item, kIe1VolumeKey)) { *value = g_ie1_volumen; return 1; }  // IE1_VOLUMEN
+     if (ie1_key(item, kIe1SlotKey)) { *value = g_ie1_state_slot; return 1; }
+     if (ie1_key(item, kIe1FullscreenKey)) { *value = g_ie1_fullscreen ? 1 : 0; return 1; }
+     if (ie1_key(item, kIe1SizeKey)) { *value = g_ie1_window_size; return 1; }
+@@ -1057,6 +1480,18 @@ int ie1_menu_get(const RecompRuntimeUiItem* item, int* value) {
  }
  
  int ie1_menu_set(const RecompRuntimeUiItem* item, int value) {
@@ -387,18 +594,64 @@ index 0e4388d..10adb83 100644
      if (const int m = ie1_mod_slot(item); m >= 0) {  // IE1_MODS_MENU
          if (m >= ie1_mods_num()) return 0;
          ie1_mods_cambiar(m, value != 0);
-@@ -1163,6 +1466,7 @@ void set_touch_from_mouse(float x, float y, bool down,
+@@ -1071,6 +1506,10 @@ int ie1_menu_set(const RecompRuntimeUiItem* item, int value) {
+         g_ie1_req_lang = true;
+         return 1;
+     }
++    if (ie1_key(item, kIe1VolumeKey)) {  // IE1_VOLUMEN
++        if (value < 0 || value > 100) return 0;
++        g_ie1_volumen = value; g_ie1_req_volumen = true; return 1;
++    }
+     if (ie1_key(item, kIe1SlotKey)) {
+         if (value < 1 || value > 10) return 0;
+         g_ie1_state_slot = value; return 1;
+@@ -1126,6 +1565,7 @@ void ie1_cfg_cargar() {
+         else if (!std::strcmp(k, "horizontal")) hor = v;
+         else if (!std::strcmp(k, "llenar")) fill = v;
+         else if (!std::strcmp(k, "ranura")) slot = v;
++        else if (!std::strcmp(k, "volumen") && v >= 0 && v <= 100) { g_ie1_volumen = v; g_ie1_req_volumen = true; }  // IE1_VOLUMEN
+     }
+     std::fclose(f);
+     if (hay_tamano && size >= 0 && size <= 2) { g_ie1_window_size = size; g_ie1_req.size = true; }
+@@ -1137,16 +1577,16 @@ void ie1_cfg_cargar() {
+     std::fprintf(stderr, "[menu] configuracion de pantalla cargada de ie1_menu.cfg\n");
+ }
+ void ie1_cfg_guardar_si_cambia() {
+-    static int ult[5] = {-1, -1, -1, -1, -1};
+-    const int cur[5] = {g_ie1_fullscreen ? 1 : 0, g_ie1_window_size, g_ie1_horizontal ? 1 : 0,
+-                        g_ie1_fill_scale ? 1 : 0, g_ie1_state_slot};
++    static int ult[6] = {-1, -1, -1, -1, -1, -1};  // IE1_VOLUMEN
++    const int cur[6] = {g_ie1_fullscreen ? 1 : 0, g_ie1_window_size, g_ie1_horizontal ? 1 : 0,
++                        g_ie1_fill_scale ? 1 : 0, g_ie1_state_slot, g_ie1_volumen};
+     if (std::memcmp(ult, cur, sizeof cur) == 0) return;
+     const bool primera = ult[0] == -1;
+     std::memcpy(ult, cur, sizeof cur);
+     if (primera) return;                       // valores de arranque: no hace falta escribir
+     if (std::FILE* f = std::fopen("ie1_menu.cfg", "w")) {
+-        std::fprintf(f, "pantalla_completa=%d\ntamano=%d\nhorizontal=%d\nllenar=%d\nranura=%d\n",
+-                     cur[0], cur[1], cur[2], cur[3], cur[4]);
++        std::fprintf(f, "pantalla_completa=%d\ntamano=%d\nhorizontal=%d\nllenar=%d\nranura=%d\nvolumen=%d\n",
++                     cur[0], cur[1], cur[2], cur[3], cur[4], cur[5]);
+         std::fclose(f);
+     }
+ }
+@@ -1163,6 +1603,8 @@ void set_touch_from_mouse(float x, float y, bool down,
          : static_cast<float>((logical_width - kScreenWidth) / 2);
      if (!down || x < left || x >= left + kScreenWidth ||
          y < bottom_origin || y >= bottom_origin + kScreenHeight) {
 +        if (ie1_overlay_activo()) ie1_overlay_toque(0, 0, 0);  // IE1_OVERLAY_TACTIL
++        else ie1_overlay_vigilar_toque(0, 0, 0);  // IE1_OVERLAY_VIGILAR
          nds_set_touch(0, 0, false);
          return;
      }
-@@ -1170,6 +1474,11 @@ void set_touch_from_mouse(float x, float y, bool down,
+@@ -1170,6 +1612,15 @@ void set_touch_from_mouse(float x, float y, bool down,
          static_cast<int>(x - left), 0, kScreenWidth - 1));
      const auto touch_y = static_cast<uint16_t>(std::clamp<int>(
          static_cast<int>(y - bottom_origin), 0, kScreenHeight - 1));
++    if (!ie1_overlay_activo() && ie1_overlay_vigilar_toque(touch_x, touch_y, 1)) {  // IE1_OVERLAY_VIGILAR
++        nds_set_touch(0, 0, false);
++        return;
++    }
 +    if (ie1_overlay_activo()) {  // IE1_OVERLAY_TACTIL: el toque es para el menu, no para el juego
 +        ie1_overlay_toque(touch_x, touch_y, 1);
 +        nds_set_touch(0, 0, false);
@@ -407,7 +660,7 @@ index 0e4388d..10adb83 100644
      nds_set_touch(touch_x, touch_y, true);
  }
  
-@@ -1710,6 +2019,13 @@ SDL_Renderer* create_renderer(SDL_Window* window) {
+@@ -1710,6 +2161,13 @@ SDL_Renderer* create_renderer(SDL_Window* window) {
      if (!renderer) renderer = SDL_CreateRenderer(window, nullptr);
      if (!renderer)
          renderer = SDL_CreateRenderer(window, "software");
@@ -421,11 +674,32 @@ index 0e4388d..10adb83 100644
      if (renderer) {
          const char* name = SDL_GetRendererName(renderer);
          std::fprintf(stderr, "[sdl] render driver: %s\n",
-@@ -2199,12 +2515,18 @@ PresentationTicks present_screens(FrontendPresentation& presentation,
+@@ -1999,8 +2457,8 @@ bool create_presentation(const NdsFrontendOptions& options,
+         (presentation.gl_top
+              ? static_cast<uint64_t>(SDL_WINDOW_OPENGL) : 0u);
+     presentation.windows[0] = create_window(
+-        presentation.separate ? "ndsrecomp - Top Screen"
+-                               : "ndsrecomp firmware preview",
++        presentation.separate ? "Inazuma Eleven Recomp - Top Screen"
++                               : "Inazuma Eleven Recomp - v1.1",  // IE1_TITULO
+         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+         (presentation.separate ? presentation.screen_widths[0]
+                                : presentation.canvas_width) * kWindowScale,
+@@ -2024,7 +2482,7 @@ bool create_presentation(const NdsFrontendOptions& options,
+         int top_y = 0;
+         SDL_GetWindowPosition(presentation.windows[0], &top_x, &top_y);
+         presentation.windows[1] = create_window(
+-            "ndsrecomp - Bottom Screen",
++            "Inazuma Eleven Recomp - Bottom Screen",  // IE1_TITULO
+             top_x + presentation.screen_widths[0] * kWindowScale + 32,
+             top_y,
+             presentation.screen_widths[1] * kWindowScale,
+@@ -2199,12 +2657,20 @@ PresentationTicks present_screens(FrontendPresentation& presentation,
                                    float virtual_stylus_y,
                                    const char* savestate_notice) {
      PresentationTicks ticks{};
 +    // IE1_OVERLAY: el menu de los mods sustituye las imagenes mientras esta abierto
++    const uint32_t* const ie1_arriba_orig = top_pixels;   // IE1_OVERLAY_DIRECTO
 +    const uint32_t* ie1_arriba = top_pixels;
 +    const uint32_t* ie1_abajo = bottom_pixels;
 +    const bool ie1_ov = ie1_overlay_dibujar(top_pixels, top_width, bottom_pixels,
@@ -437,11 +711,12 @@ index 0e4388d..10adb83 100644
          const bool latency = nds_frontend_latency::enabled.load(std::memory_order_relaxed);
          const auto pool_begin = latency ? SDL_GetPerformanceCounter() : 0;
 -        const bool direct = nds_gpu2d_direct_frame(&direct_frame);
-+        const bool direct = !ie1_ov && nds_gpu2d_direct_frame(&direct_frame);  // IE1_OVERLAY
++        const bool direct = !(ie1_ov && ie1_arriba != ie1_arriba_orig) &&   // IE1_OVERLAY_DIRECTO
++                            nds_gpu2d_direct_frame(&direct_frame);
          if (latency) ticks.pool_wait = SDL_GetPerformanceCounter() - pool_begin;
          NdsComputePresentTicks gl_ticks{};
          gl_ticks.diagnostic = latency;
-@@ -2624,6 +2946,13 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+@@ -2624,6 +3090,19 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
      // stick never fights explicit D-pad presses.
      uint16_t stick_pressed = 0;
      auto publish_keys = [&]() {
@@ -452,10 +727,16 @@ index 0e4388d..10adb83 100644
 +            nds_set_key_mask(0x0FFFu);
 +            return;
 +        }
++        if (ie1_overlay_vigilar_teclas(static_cast<uint16_t>(  // IE1_OVERLAY_VIGILAR
++                keyboard_pressed | controller_pressed | mouse_pressed |
++                mph_prime_pressed | stick_pressed))) {
++            nds_set_key_mask(0x0FFFu);
++            return;
++        }
          nds_set_key_mask(static_cast<uint16_t>(
              0x0FFFu &
              ~(keyboard_pressed | controller_pressed | mouse_pressed |
-@@ -2636,23 +2965,23 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+@@ -2636,24 +3115,45 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
      static const RecompRuntimeUiItem runtime_menu_items[] = {
          // IE1_MENU
          // IE1_MODS_MENU
@@ -463,35 +744,57 @@ index 0e4388d..10adb83 100644
 -         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
 +        {kIe1ModKeys[0], "Mods", ie1_mod_nombre_ui(0, ie1_mod_label(0)),
 +         ie1_mod_descripcion(0),  // IE1_MENU_INFO_MODS
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
++        {kIe1ModKeys[1], "Mods", ie1_mod_nombre_ui(1, ie1_mod_label(1)),
++         ie1_mod_descripcion(1),  // IE1_MENU_INFO_MODS
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
++        {kIe1ModKeys[2], "Mods", ie1_mod_nombre_ui(2, ie1_mod_label(2)),
++         ie1_mod_descripcion(2),  // IE1_MENU_INFO_MODS
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
++        {kIe1ModKeys[3], "Mods", ie1_mod_nombre_ui(3, ie1_mod_label(3)),
++         ie1_mod_descripcion(3),  // IE1_MENU_INFO_MODS
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
++        {kIe1ModKeys[4], "Mods", ie1_mod_nombre_ui(4, ie1_mod_label(4)),
++         ie1_mod_descripcion(4),  // IE1_MENU_INFO_MODS
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
++        {kIe1ModKeys[5], "Mods", ie1_mod_nombre_ui(5, ie1_mod_label(5)),
++         ie1_mod_descripcion(5),  // IE1_MENU_INFO_MODS
++         RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
++        {kIe1ModKeys[6], "Mods", ie1_mod_nombre_ui(6, ie1_mod_label(6)),
++         ie1_mod_descripcion(6),  // IE1_MENU_INFO_MODS
           RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
 -        {kIe1ModKeys[1], "Mods", ie1_mod_label(1),
 -         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
-+        {kIe1ModKeys[1], "Mods", ie1_mod_nombre_ui(1, ie1_mod_label(1)),
-+         ie1_mod_descripcion(1),  // IE1_MENU_INFO_MODS
++        {kIe1ModKeys[7], "Mods", ie1_mod_nombre_ui(7, ie1_mod_label(7)),
++         ie1_mod_descripcion(7),  // IE1_MENU_INFO_MODS
           RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
 -        {kIe1ModKeys[2], "Mods", ie1_mod_label(2),
 -         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
-+        {kIe1ModKeys[2], "Mods", ie1_mod_nombre_ui(2, ie1_mod_label(2)),
-+         ie1_mod_descripcion(2),  // IE1_MENU_INFO_MODS
++        {kIe1ModKeys[8], "Mods", ie1_mod_nombre_ui(8, ie1_mod_label(8)),
++         ie1_mod_descripcion(8),  // IE1_MENU_INFO_MODS
           RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
 -        {kIe1ModKeys[3], "Mods", ie1_mod_label(3),
 -         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
-+        {kIe1ModKeys[3], "Mods", ie1_mod_nombre_ui(3, ie1_mod_label(3)),
-+         ie1_mod_descripcion(3),  // IE1_MENU_INFO_MODS
++        {kIe1ModKeys[9], "Mods", ie1_mod_nombre_ui(9, ie1_mod_label(9)),
++         ie1_mod_descripcion(9),  // IE1_MENU_INFO_MODS
           RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
 -        {kIe1ModKeys[4], "Mods", ie1_mod_label(4),
 -         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
-+        {kIe1ModKeys[4], "Mods", ie1_mod_nombre_ui(4, ie1_mod_label(4)),
-+         ie1_mod_descripcion(4),  // IE1_MENU_INFO_MODS
++        {kIe1ModKeys[10], "Mods", ie1_mod_nombre_ui(10, ie1_mod_label(10)),
++         ie1_mod_descripcion(10),  // IE1_MENU_INFO_MODS
           RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
 -        {kIe1ModKeys[5], "Mods", ie1_mod_label(5),
 -         "Activa o desactiva el mod. Se aplica al reiniciar (System > Reiniciar).",
-+        {kIe1ModKeys[5], "Mods", ie1_mod_nombre_ui(5, ie1_mod_label(5)),
-+         ie1_mod_descripcion(5),  // IE1_MENU_INFO_MODS
++        {kIe1ModKeys[11], "Mods", ie1_mod_nombre_ui(11, ie1_mod_label(11)),
++         ie1_mod_descripcion(11),  // IE1_MENU_INFO_MODS
           RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1OnOffChoices, 2, nullptr},
++        {kIe1VolumeKey, "System", "Volume",  // IE1_VOLUMEN
++         "Volumen del juego (0 = sin sonido, 100 = normal). Se guarda para la proxima vez.",
++         RECOMP_RUNTIME_UI_INT, 0, 100, 10, nullptr, 0, nullptr},
          {kIe1RestartKey, "System", "Reiniciar",  // IE1_MENU_EXTRA
           "Cierra y vuelve a abrir el juego (por ejemplo, para aplicar el idioma).",
-@@ -2684,6 +3013,21 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+          RECOMP_RUNTIME_UI_ACTION, 0, 0, 0, nullptr, 0, nullptr},
+@@ -2684,6 +3184,21 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
          {kIe1ScaleKey, "Pantalla", "Escalado",
           "Llenar la ventana o escala entera sin deformar pixeles.",
           RECOMP_RUNTIME_UI_CHOICE, 0, 1, 1, kIe1ScaleChoices, 2, nullptr},
@@ -513,7 +816,7 @@ index 0e4388d..10adb83 100644
          {kRuntimeMouseSensitivityKey, "Input", "Mouse sensitivity",
           "Prime Controls relative aim speed.",
           RECOMP_RUNTIME_UI_INT, 10, 400, 1, nullptr, 0, nullptr},
-@@ -2696,8 +3040,10 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+@@ -2696,8 +3211,10 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
      };
      RecompRuntimeUiConfig runtime_menu_config{};
      runtime_menu_config.title = "Inazuma Eleven";  // IE1_MENU
@@ -526,7 +829,7 @@ index 0e4388d..10adb83 100644
      runtime_menu_config.item_count =
          sizeof(runtime_menu_items) / sizeof(runtime_menu_items[0]);
      runtime_menu_config.callbacks.context = &runtime_menu_state;
-@@ -2707,8 +3053,8 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+@@ -2707,8 +3224,8 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
      runtime_menu_config.callbacks.is_enabled = runtime_menu_is_enabled;
      runtime_menu_config.callbacks.save = runtime_menu_save;
      runtime_menu_config.theme = "nds";
@@ -537,7 +840,7 @@ index 0e4388d..10adb83 100644
      RecompRuntimeUi* runtime_ui =
          recomp_runtime_ui_create(&runtime_menu_config);
      if (!runtime_ui) {
-@@ -3509,6 +3855,10 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+@@ -3509,6 +4026,10 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
                              nds_set_touch(0, 0, false);
                          }
                      }
@@ -548,7 +851,21 @@ index 0e4388d..10adb83 100644
                  } else if (scancode == SDL_SCANCODE_ESCAPE) {
                      if (relative_mouse.captured() || virtual_stylus_active())
                          release_relative_mouse();
-@@ -4073,6 +4423,24 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+@@ -4056,6 +4577,13 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+             savestate_notice = "Idioma guardado: reinicia el juego para aplicarlo";
+             savestate_notice_until = SDL_GetPerformanceCounter() + frequency * 4u;
+         }
++        if (g_ie1_req_volumen) {  // IE1_VOLUMEN
++            g_ie1_req_volumen = false;
++#if defined(NDS_HAVE_SDL3)
++            if (audio && !audio_queue.output_muted)
++                SDL_SetAudioStreamGain(audio.stream, static_cast<float>(g_ie1_volumen) / 100.0f);
++#endif
++        }
+         ie1_cfg_guardar_si_cambia();  // IE1_MENU_EXTRA
+         if (g_ie1_req_mods) {  // IE1_MODS_MENU
+             g_ie1_req_mods = false;
+@@ -4073,6 +4601,24 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
  #endif
              SDL_PushEvent(&ie1_quit);
          }
@@ -573,7 +890,31 @@ index 0e4388d..10adb83 100644
          // IE1_MENU: peticiones del menu de Esc
          if (g_ie1_req.fullscreen) {
              g_ie1_req.fullscreen = false;
-@@ -4915,3 +5283,6 @@ uint32_t nds_frontend_frame_digests(uint64_t from, uint32_t max,
+@@ -4539,18 +5085,17 @@ int nds_run_interactive_frontend(const NdsFrontendOptions& initial_options) {
+                     ? " - Gov S" + std::to_string(perf_governor.stage) +
+                           (perf_governor.stage2_held ? " held" : "")
+                     : "";
++            (void)governor_text;  // IE1_TITULO: en el titulo va la version
+             const std::string top_title = !savestate_notice.empty()
+-                ? "ndsrecomp - " + savestate_notice
++                ? "Inazuma Eleven Recomp - " + savestate_notice
+                 : presentation.separate
+-                ? "ndsrecomp - Top Screen - " + fps_text + governor_text
+-                : "ndsrecomp firmware preview - " + fps_text +
+-                      governor_text;
++                ? "Inazuma Eleven Recomp - Top Screen - " + fps_text + " - v1.1"
++                : "Inazuma Eleven Recomp - " + fps_text + " - v1.1";
+             SDL_SetWindowTitle(presentation.windows[0],
+                                top_title.c_str());
+             if (presentation.separate) {
+                 const std::string bottom_title =
+-                    "ndsrecomp - Bottom Screen - " + fps_text +
+-                    governor_text;
++                    "Inazuma Eleven Recomp - Bottom Screen - " + fps_text + " - v1.1";  // IE1_TITULO
+                 SDL_SetWindowTitle(presentation.windows[1],
+                                    bottom_title.c_str());
+             }
+@@ -4915,3 +5460,6 @@ uint32_t nds_frontend_frame_digests(uint64_t from, uint32_t max,
      if (after - from > kFrameDigestRing) return 0;
      return copied;
  }
@@ -581,10 +922,10 @@ index 0e4388d..10adb83 100644
 +// IE1_MENU_BARRA
 +extern "C" const char *ie1_tr_c(const char *t) { return ie1_tr(t); }
 diff --git a/runner/src/hle_ie1_card.cpp b/runner/src/hle_ie1_card.cpp
-index 9a93137..b5297f8 100644
+index 9a93137..cd7952d 100644
 --- a/runner/src/hle_ie1_card.cpp
 +++ b/runner/src/hle_ie1_card.cpp
-@@ -7,6 +7,12 @@
+@@ -7,9 +7,16 @@
  // al bufer 0x020BDB60 y copia la parte necesaria (MI_CpuCopy8), apuntando el
  // bloque en 0x020AAE0C. Al final envia B8 (ID del chip) y lo compara; aqui no
  // hace falta porque el cartucho emulado nunca se extrae. Devuelve r0 = r3.
@@ -597,7 +938,20 @@ index 9a93137..b5297f8 100644
  #include "hle_ie1_card.h"
  #include "hle_vector_math.h"
  
-@@ -68,6 +74,15 @@ std::array<uint8_t, kChipSize> chip_proof{};
++#include <algorithm>
+ #include <array>
+ #include <cstdint>
+ #include <cstdio>
+@@ -22,6 +29,8 @@
+ 
+ #include "sha1.h"
+ #include "state.h"
++#include "io.h"
++#include "gpu3d.h"
+ 
+ const std::vector<uint8_t>& ie1_hle_card_rom();   // definido en io.cpp
+ 
+@@ -68,6 +77,15 @@ std::array<uint8_t, kChipSize> chip_proof{};
  NdsStaticValidation chip_validation{kChipEntry, kChipSize, chip_proof.data(), nullptr, 0};
  uint64_t chip_calls = 0;
  
@@ -613,7 +967,69 @@ index 9a93137..b5297f8 100644
  // Descompresion hacia atras (BLZ) de los overlays al cargarlos
  constexpr uint32_t kBlzEntry = 0x02000950u;
  constexpr uint32_t kBlzSize = 0xACu;               // 172 bytes
-@@ -165,7 +180,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+@@ -75,6 +93,61 @@ constexpr const char* kBlzSha1 = "bf25dc3dbcbee1fff63e0eee637c3360933aa857";
+ std::array<uint8_t, kBlzSize> blz_proof{};
+ NdsStaticValidation blz_validation{kBlzEntry, kBlzSize, blz_proof.data(), nullptr, 0};
+ uint64_t blz_calls = 0;
++// Envio de palabras a un registro fijo (MI_CpuSend32 del SDK, 0x020091C8):
++// r0 = origen, r1 = destino (no avanza), r2 = bytes. El juego manda asi los
++// comandos 3D al GXFIFO (0x04000400): 0x0202B6D4 y otras ~280 llamadas. Cada
++// palabra al GXFIFO costaba una salida de la region nativa y una escritura de
++// E/S suelta; aqui se hace el bucle entero de una vez, con las mismas
++// escrituras, en el mismo orden y por el mismo camino del bus. Si el GXFIFO se
++// llena (la CPU se queda parada), se para justo despues de esa escritura y se
++// sigue en 0x020091CC (la vuelta del bucle) cuando el motor 3D lo vacia.
++// IE1_GX_HLE=0 lo desactiva (para comparar).
++constexpr uint32_t kSendEntry = 0x020091C8u;
++constexpr uint32_t kSendLoop = 0x020091CCu;
++constexpr uint32_t kSendSize = 0x18u;              // 24 bytes, sin constantes
++constexpr const char* kSendSha1 = "ae6f870471f3f8365211f530ed2cfb372d22a9b4";
++std::array<uint8_t, kSendSize> send_proof{};
++NdsStaticValidation send_validation{kSendEntry, kSendSize, send_proof.data(), nullptr, 0};
++uint64_t send_calls = 0, send_words = 0, send_stalls = 0, send_epilogos = 0;
++// Vuelta del envio: casi todas las llamadas (0x0202B6D4, la funcion de comandos 3D
++// 0x0202B608) vuelven a un "ldmia sp!, {..., pc}". En el modelo performance esa
++// instruccion suelta la ejecutaba el interprete (unas 5.000 veces por fotograma).
++// Si la instruccion de la vuelta es esa, se hace aqui mismo (mismas lecturas de la
++// pila, mismo orden) y se salta directamente al que llamo a la funcion.
++// IE1_GX_EPILOGO=0 lo desactiva (para comparar).
++bool gx_epilogo_on() {
++    static const bool on = [] { const char* e = std::getenv("IE1_GX_EPILOGO"); return !(e && *e == '0'); }();
++    return on;
++}
++// Funcion de comandos 3D del motor (0x0202B608): r0 = comando, r1 = parametros,
++// r2 = numero de parametros. Estado en 0x020C2380: [0] = lista (0 = sin lista),
++// [4] = DMA de la lista en curso. Con DMA en curso y sitio en la lista, anade el
++// comando a la lista (copia los parametros como 0x0200922C, MI_CpuCopy32); sin DMA
++// y sin nada pendiente, escribe el comando en 0x04000400 y manda los parametros
++// (como 0x020091C8). Lo demas (esperar a la DMA o vaciar la lista antes) lo hace
++// el codigo original: se guarda la pila como su primera instruccion y se sigue
++// en 0x0202B60C. Cada llamada ahorraba dos saltos del despachador.
++// IE1_GX_CMD=0 lo desactiva (para comparar).
++constexpr uint32_t kCmdEntry = 0x0202B608u;
++constexpr uint32_t kCmdBody = 0x0202B60Cu;
++constexpr uint32_t kCmdSize = 0xDCu;               // 220 bytes, con sus dos constantes
++constexpr const char* kCmdSha1 = "c63239ccf3aab4a9ed6294cf893457959eef80bb";
++constexpr uint32_t kCopyEntry = 0x0200922Cu;       // MI_CpuCopy32 que usa para la lista
++constexpr uint32_t kCopySize = 0x38u;
++constexpr const char* kCopySha1 = "96ec8ebd292eb69968cc2a8ffe7cd95c7893540a";
++constexpr uint32_t kCmdState = 0x020C2380u;
++std::array<uint8_t, kCmdSize> cmd_proof{};
++std::array<uint8_t, kCopySize> copy_proof{};
++NdsStaticValidation cmd_validation{kCmdEntry, kCmdSize, cmd_proof.data(), nullptr, 0};
++uint64_t cmd_calls = 0, cmd_lista = 0, cmd_directo = 0, cmd_resto = 0;
++bool gx_cmd_on() {
++    static const bool on = [] { const char* e = std::getenv("IE1_GX_CMD"); return !(e && *e == '0'); }();
++    return on;
++}
++bool gx_hle_on() {
++    static const bool on = [] { const char* e = std::getenv("IE1_GX_HLE"); return !(e && *e == '0'); }();
++    return on;
++}
+ int supported = -1;
+ uint64_t calls = 0, bytes = 0;
+ 
+@@ -165,7 +238,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
          std::array<uint8_t, kSize> live{};
          if (!bus_range_has_write_provenance(pc, kSize) ||
              !bus_debug_copy(0, pc, live.data(), kSize) ||
@@ -622,7 +1038,7 @@ index 9a93137..b5297f8 100644
              return {nullptr, &validation};
          proof = live;
          return {card_read, &validation};
-@@ -174,7 +189,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+@@ -174,7 +247,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
          std::array<uint8_t, kLzSize> live{};
          if (!bus_range_has_write_provenance(pc, kLzSize) ||
              !bus_debug_copy(0, pc, live.data(), kLzSize) ||
@@ -631,7 +1047,7 @@ index 9a93137..b5297f8 100644
              return {nullptr, &lz_validation};
          lz_proof = live;
          return {lz_uncompress, &lz_validation};
-@@ -183,16 +198,25 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+@@ -183,25 +256,57 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
          std::array<uint8_t, kBlzSize> live{};
          if (!bus_range_has_write_provenance(pc, kBlzSize) ||
              !bus_debug_copy(0, pc, live.data(), kBlzSize) ||
@@ -659,7 +1075,31 @@ index 9a93137..b5297f8 100644
              return {nullptr, &chip_validation};
          chip_proof = live;
          return {chip_id, &chip_validation};
-@@ -201,7 +225,7 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
+     }
++    if ((pc == kSendEntry || pc == kSendLoop) && gx_hle_on()) {
++        std::array<uint8_t, kSendSize> live{};
++        if (!bus_range_has_write_provenance(kSendEntry, kSendSize) ||
++            !bus_debug_copy(0, kSendEntry, live.data(), kSendSize) ||
++            (live != send_proof && gba::sha1(live.data(), kSendSize).hex() != kSendSha1))
++            return {nullptr, &send_validation};
++        send_proof = live;
++        return {gx_send, &send_validation};
++    }
++    if (pc == kCmdEntry && gx_cmd_on() && gx_hle_on()) {
++        std::array<uint8_t, kCmdSize> live{};
++        std::array<uint8_t, kCopySize> copia{};
++        if (!bus_range_has_write_provenance(kCmdEntry, kCmdSize) ||
++            !bus_debug_copy(0, kCmdEntry, live.data(), kCmdSize) ||
++            (live != cmd_proof && gba::sha1(live.data(), kCmdSize).hex() != kCmdSha1))
++            return {nullptr, &cmd_validation};
++        if (!bus_debug_copy(0, kCopyEntry, copia.data(), kCopySize) ||
++            (copia != copy_proof && gba::sha1(copia.data(), kCopySize).hex() != kCopySha1))
++            return {nullptr, &cmd_validation};
++        cmd_proof = live;
++        copy_proof = copia;
++        return {gx_cmd, &cmd_validation};
++    }
+     if (kYuvHle && pc == kYuvEntry) {
          std::array<uint8_t, kYuvSize> live{};
          if (!bus_range_has_write_provenance(pc, kYuvSize) ||
              !bus_debug_copy(0, pc, live.data(), kYuvSize) ||
@@ -668,7 +1108,305 @@ index 9a93137..b5297f8 100644
              return {nullptr, &yuv_validation};
          yuv_proof = live;
          return {yuv_convert, &yuv_validation};
-@@ -265,6 +289,18 @@ void blz_uncompress() {
+@@ -261,10 +366,316 @@ void blz_uncompress() {
+     nds_hle::finish(64u + static_cast<uint32_t>(written) * 4u);
+ }
+ 
++// Envio en lote al GXFIFO (0x04000400): el mismo camino nativo que usa la DMA
++// (nds_gpu3d_command_batch, NDS_GX_COMMAND_CACHE): lee las palabras de la RAM
++// principal y las mete ya decodificadas, sin pasar por el bus palabra a palabra.
++// Para en el primer atasco real, como el bucle original. Solo RAM principal
++// (0x02000000-0x023FFFFF), alineada, y sin cruzar una pagina de 4 KB por lote.
++// Devuelve las palabras aceptadas; 'ok' = false si el lote no esta disponible
++// (runner sin NDS_GX_COMMAND_CACHE) o la zona no vale: entonces se usa el bus.
++// IE1_GX_LOTE=0 lo desactiva (para comparar).
++uint64_t lote_llamadas = 0, lote_palabras = 0;
++// Escritura directa al motor 3D: nds_io_write, con la ARM9 activa y una direccion
++// del motor 3D (0x04000400-0x040006A3), solo hace nds_gpu3d_write (io.cpp, tras
++// el corte de las rondas largas, que no aplica al motor 3D). Los atajos llaman
++// directamente a nds_gpu3d_write y se ahorran el reparto del bus y de la E/S.
++// IE1_GX_DIRECTO=0 lo desactiva (para comparar).
++bool gx_directo_on() {
++    static const bool on = [] { const char* e = std::getenv("IE1_GX_DIRECTO"); return !(e && *e == '0'); }();
++    return on;
++}
++inline void gx_w(uint32_t addr, uint32_t value) {
++    if (gx_directo_on()) nds_gpu3d_write(addr, value, 4u);
++    else bus_write_u32(addr, value);
++}
++bool gx_lote_on() {
++    static const bool on = [] { const char* e = std::getenv("IE1_GX_LOTE"); return !(e && *e == '0'); }();
++    return on;
++}
++uint32_t gx_lote(uint32_t src, uint32_t count, bool& ok) {
++    ok = false;
++    if (!count || !gx_lote_on() || (src & 3u) || src < 0x02000000u ||
++        uint64_t{src} + uint64_t{count} * 4u > 0x02400000u)
++        return 0;
++    uint32_t done = 0;
++    while (done < count) {
++        const uint32_t at = src + done * 4u;
++        const uint32_t page = (4096u - (at & 4095u)) / 4u;
++        const uint32_t chunk = std::min(count - done, page);
++        const uint32_t c = nds_gpu3d_command_batch(at, chunk, 0, chunk, true);
++        if (c == 0) {                       // sin lote en este runner
++            if (done == 0) return 0;
++            break;
++        }
++        done += c;
++        if (c < chunk || nds_gxfifo_stalled()) break;
++    }
++    ok = true;
++    if (++lote_llamadas == 1u)
++        std::fprintf(stderr, "[hle] Inazuma Eleven: comandos 3D en lote (como la DMA)\n");
++    lote_palabras += done;
++    return done;
++}
++
++// Rutina original (0x020091C8, MI_CpuSend32):
++//   add r12, r0, r2 / bucle: cmp r0, r12 / ldmlt r0!, {r2} / strlt r2, [r1] / blt bucle / bx lr
++// Al terminar: r0 = r12 = final, r2 = ultima palabra, banderas de "cmp r0, r12".
++void gx_send() {
++    const bool vuelta = g_cpu.R[15] == kSendLoop;   // continuacion tras un atasco
++    uint32_t src = g_cpu.R[0];
++    const uint32_t dst = g_cpu.R[1];
++    const uint32_t end = vuelta ? g_cpu.R[12] : src + g_cpu.R[2];
++    uint32_t last = g_cpu.R[2];
++    uint32_t words = 0;
++    const bool gx = dst >= 0x04000400u && dst < 0x04000440u;
++    if (!vuelta) ++send_calls;
++    if (send_calls == 1 && !vuelta && words == 0)
++        std::fprintf(stderr, "[hle] Inazuma Eleven: envio de comandos 3D HLE en uso\n");
++    if (dst == 0x04000400u && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++        bool ok = false;
++        const uint32_t n = gx_lote(src, (end - src) >> 2, ok);
++        if (ok && n) {
++            src += n << 2;
++            last = bus_read_u32(src - 4u);
++            words += n;
++            if (nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++                ++send_stalls;
++                send_words += words;
++                g_cpu.R[0] = src;
++                g_cpu.R[2] = last;
++                g_cpu.R[12] = end;
++                g_cpu.R[15] = kSendLoop;
++                runtime_tick(8u * words);
++                return;
++            }
++        }
++    }
++    while (static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++        last = bus_read_u32(src);
++        src += 4u;
++        if (gx) gx_w(dst, last); else bus_write_u32(dst, last);
++        ++words;
++        if (gx && nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++            // GXFIFO lleno: la CPU se para aqui, como tras el strlt original
++            ++send_stalls;
++            send_words += words;
++            g_cpu.R[0] = src;
++            g_cpu.R[2] = last;
++            g_cpu.R[12] = end;
++            g_cpu.R[15] = kSendLoop;
++            runtime_tick(8u * words);
++            return;
++        }
++    }
++    send_words += words;
++    g_cpu.R[0] = src;
++    g_cpu.R[2] = last;
++    g_cpu.R[12] = end;
++    // banderas de cmp r0, r12
++    const uint32_t res = src - end;
++    uint32_t f = g_cpu.cpsr & ~0xF0000000u;   // N Z C V
++    if (res & 0x80000000u) f |= 0x80000000u;
++    if (res == 0u) f |= 0x40000000u;
++    if (src >= end) f |= 0x20000000u;
++    if (((src ^ end) & (src ^ res)) & 0x80000000u) f |= 0x10000000u;
++    g_cpu.cpsr = f;
++    const uint32_t lr = g_cpu.R[14];
++    if (gx_epilogo_on() && (lr & 3u) == 0u && lr >= 0x02000000u && lr < 0x02400000u) {
++        const uint32_t op = bus_read_u32(lr);
++        // ldmia sp!, {lista, pc} sin condicion y sin sp en la lista
++        if ((op & 0xFFFF8000u) == 0xE8BD8000u && (op & 0x2000u) == 0u) {
++            uint32_t sp = g_cpu.R[13];
++            uint32_t n = 1u;
++            for (uint32_t r = 0; r < 15u; ++r) {
++                if (op & (1u << r)) { g_cpu.R[r] = bus_read_u32(sp); sp += 4u; ++n; }
++            }
++            const uint32_t target = bus_read_u32(sp);
++            sp += 4u;
++            g_cpu.R[13] = sp;
++            if (++send_epilogos == 1u)
++                std::fprintf(stderr, "[hle] Inazuma Eleven: vuelta del envio 3D sin interprete (0x%08X)\n", lr);
++            g_cpu.R[15] = target & ((target & 1u) ? ~1u : ~3u);
++            g_cpu.cpsr = (g_cpu.cpsr & ~CPSR_T_BIT) | ((target & 1u) ? CPSR_T_BIT : 0u);
++            runtime_tick(8u + 8u * words + 2u + n);
++            if (runtime_unwinding()) return;
++            if (runtime_call_should_return(g_cpu.R[15])) return;
++            runtime_dispatch_with_exchange(target);
++            return;
++        }
++    }
++    nds_hle::finish(8u + 8u * words);
++}
++
++namespace {
++// banderas de "cmp a, b"
++uint32_t flags_cmp(uint32_t cpsr, uint32_t a, uint32_t b) {
++    const uint32_t res = a - b;
++    uint32_t f = cpsr & ~0xF0000000u;
++    if (res & 0x80000000u) f |= 0x80000000u;
++    if (res == 0u) f |= 0x40000000u;
++    if (a >= b) f |= 0x20000000u;
++    if (((a ^ b) & (a ^ res)) & 0x80000000u) f |= 0x10000000u;
++    return f;
++}
++// vuelta al que llamo (el "ldmia sp!, {r3-r7, pc}" de la funcion, sin marco guardado)
++void cmd_return(uint32_t target, uint32_t cycles) {
++    g_cpu.R[15] = target & ((target & 1u) ? ~1u : ~3u);
++    g_cpu.cpsr = (g_cpu.cpsr & ~CPSR_T_BIT) | ((target & 1u) ? CPSR_T_BIT : 0u);
++    runtime_tick(cycles);
++    if (runtime_unwinding()) return;
++    if (runtime_call_should_return(g_cpu.R[15])) return;
++    runtime_dispatch_with_exchange(target);
++}
++// el marco que guarda la primera instruccion: stmdb sp!, {r3, r4, r5, r6, r7, lr}
++void cmd_frame() {
++    uint32_t sp = g_cpu.R[13] - 24u;
++    g_cpu.R[13] = sp;
++    for (uint32_t r : {3u, 4u, 5u, 6u, 7u, 14u}) { bus_write_u32(sp, g_cpu.R[r]); sp += 4u; }
++}
++} // namespace
++
++// Rutina original (0x0202B608): ver la explicacion junto a kCmdEntry.
++void gx_cmd() {
++    const uint32_t cmd = g_cpu.R[0], par = g_cpu.R[1], cnt = g_cpu.R[2];
++    const uint32_t caller = g_cpu.R[14];
++    ++cmd_calls;
++    if (cmd_calls == 1u)
++        std::fprintf(stderr, "[hle] Inazuma Eleven: funcion de comandos 3D HLE en uso\n");
++    const uint32_t lista = bus_read_u32(kCmdState);
++    const uint32_t dma = bus_read_u32(kCmdState + 4u);
++    if (lista != 0u && dma != 0u) {
++        const uint32_t n = bus_read_u32(lista);
++        const uint32_t n1 = n + 1u;
++        if (n1 + cnt <= 0xC0u) {
++            // a la lista: [lista] = n + 1, comando en lista + 4 + 4n, parametros detras
++            ++cmd_lista;
++            bus_write_u32(lista, n1);
++            const uint32_t at = bus_read_u32(kCmdState) + (n << 2);
++            bus_write_u32(at + 4u, cmd);
++            if (cnt == 0u) {
++                g_cpu.R[0] = at;
++                g_cpu.R[1] = n1 + cnt;
++                g_cpu.R[2] = n;                    // r3-r7 vuelven a ser los del que llamo
++                g_cpu.cpsr = flags_cmp(g_cpu.cpsr, 0u, 0u);
++                cmd_return(caller, 24u);
++                return;
++            }
++            const uint32_t l2 = bus_read_u32(kCmdState);
++            const uint32_t k = bus_read_u32(l2);
++            uint32_t dst = l2 + 4u + (k << 2);
++            uint32_t src = par;
++            const uint32_t bytes = cnt << 2;
++            const uint32_t end = dst + bytes;
++            const uint32_t r12 = dst + ((bytes >> 5) << 5);
++            uint32_t r2 = bytes;
++            while (static_cast<int32_t>(dst) < static_cast<int32_t>(r12)) {
++                uint32_t w[8];
++                for (uint32_t i = 0; i < 8u; ++i) w[i] = bus_read_u32(src + 4u * i);
++                for (uint32_t i = 0; i < 8u; ++i) bus_write_u32(dst + 4u * i, w[i]);
++                r2 = w[0];
++                src += 32u; dst += 32u;
++            }
++            while (static_cast<int32_t>(dst) < static_cast<int32_t>(end)) {
++                r2 = bus_read_u32(src);
++                bus_write_u32(dst, r2);
++                src += 4u; dst += 4u;
++            }
++            const uint32_t l3 = bus_read_u32(kCmdState);
++            const uint32_t total = bus_read_u32(l3) + cnt;
++            bus_write_u32(l3, total);
++            g_cpu.R[0] = total;
++            g_cpu.R[1] = l3;
++            g_cpu.R[2] = r2;
++            g_cpu.R[12] = r12;
++            g_cpu.R[14] = 0x0202B678u;                 // lr que deja el bl a la copia
++            g_cpu.cpsr = flags_cmp(g_cpu.cpsr, dst, end);
++            cmd_return(caller, 40u + 4u * cnt);
++            return;
++        }
++    }
++    const bool directo = (dma == 0u) && (lista == 0u || bus_read_u32(lista) == 0u);
++    if (!directo) {
++        // esperar a la DMA o vaciar la lista: lo hace el codigo original
++        ++cmd_resto;
++        cmd_frame();
++        g_cpu.R[15] = kCmdBody;
++        runtime_tick(2u);
++        return;
++    }
++    // directo: comando a 0x04000400 y parametros con el envio (0x020091C8)
++    ++cmd_directo;
++    constexpr uint32_t fifo = 0x04000400u;
++    gx_w(fifo, cmd);
++    auto atasco = [&](uint32_t src, uint32_t last, uint32_t end, uint32_t pc, uint32_t words) {
++        // el motor 3D esta lleno: queda como dentro de la funcion original
++        cmd_frame();
++        g_cpu.R[3] = lista; g_cpu.R[4] = cnt; g_cpu.R[5] = par; g_cpu.R[6] = cmd;
++        g_cpu.R[7] = kCmdState;
++        g_cpu.R[0] = src; g_cpu.R[1] = fifo; g_cpu.R[2] = last;
++        if (pc == kSendLoop) g_cpu.R[12] = end;     // antes del bl, r12 sigue como estaba
++        g_cpu.R[14] = 0x0202B6D8u;
++        g_cpu.R[15] = pc;
++        ++send_stalls;
++        runtime_tick(8u + 8u * words);
++    };
++    uint32_t src = par;
++    const uint32_t end = par + (cnt << 2);
++    if (nds_gxfifo_stalled() && cnt != 0u) {
++        atasco(par, cnt << 2, end, kSendEntry, 0u);  // falta el bl al envio: r2 = bytes
++        return;
++    }
++    uint32_t last = cnt << 2, words = 0;
++    if (static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++        bool ok = false;
++        const uint32_t n = gx_lote(src, (end - src) >> 2, ok);
++        if (ok && n) {
++            src += n << 2;
++            last = bus_read_u32(src - 4u);
++            words += n;
++            if (nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++                send_words += words;
++                atasco(src, last, end, kSendLoop, words);
++                return;
++            }
++        }
++    }
++    while (static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++        last = bus_read_u32(src);
++        src += 4u;
++        gx_w(fifo, last);
++        ++words;
++        if (nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
++            send_words += words;
++            atasco(src, last, end, kSendLoop, words);
++            return;
++        }
++    }
++    send_words += words;
++    g_cpu.R[0] = src;
++    g_cpu.R[1] = fifo;
++    g_cpu.R[2] = last;
++    g_cpu.R[12] = end;
++    g_cpu.R[14] = 0x0202B6D8u;                         // lr que deja el bl al envio
++    g_cpu.cpsr = flags_cmp(g_cpu.cpsr, src, end);
++    cmd_return(caller, 16u + 8u * words);
++}
++
+ // Rutina original (0x02011B54): envia el comando B8, espera el dato sondeando
  // ROMCTRL y devuelve en r0 el ID del chip. El cartucho emulado nunca se
  // extrae, asi que el ID es siempre el que el arranque guardo en 0x02FFFC00
  // (el mismo con el que el juego lo compara despues en 0x0201234C).
@@ -687,7 +1425,7 @@ index 9a93137..b5297f8 100644
  void chip_id() {
      if (chip_calls++ == 0)
          std::fprintf(stderr, "[hle] Inazuma Eleven: ID del chip del cartucho HLE en uso\n");
-@@ -403,7 +439,84 @@ void lz_uncompress() {
+@@ -403,7 +814,84 @@ void lz_uncompress() {
      nds_hle::finish(64u + static_cast<uint32_t>(written) * 4u);
  }
  
@@ -773,18 +1511,30 @@ index 9a93137..b5297f8 100644
      const uint32_t len = g_cpu.R[3];
      uint32_t dst = g_cpu.R[1], src = g_cpu.R[2], left = len;
 diff --git a/runner/src/hle_ie1_card.h b/runner/src/hle_ie1_card.h
-index 9ada1e3..10c9f9d 100644
+index 9ada1e3..6aedd4d 100644
 --- a/runner/src/hle_ie1_card.h
 +++ b/runner/src/hle_ie1_card.h
-@@ -22,5 +22,6 @@ void card_read();
+@@ -15,6 +15,9 @@ struct Replacement {
+ //   0x02174240  conversion de color de los videos (overlay 88, desactivado)
+ //   0x02011B54  lectura del ID del chip del cartucho (88 bytes)
+ //   0x02000950  descompresion hacia atras de overlays (MIi_UncompressBackward, 172 bytes)
++//   0x020091C8  envio de palabras a un registro fijo (MI_CpuSend32, 24 bytes): los
++//               comandos 3D al GXFIFO; 0x020091CC es su continuacion tras un atasco
++//   0x0202B608  funcion de comandos 3D del motor (220 bytes): a la lista o directo al GXFIFO
+ // Devuelve la validacion propia de la rutina completa aunque la huella no
+ // coincida, para que el runner vigile esas paginas y vuelva a intentarlo.
+ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb);
+@@ -22,5 +25,8 @@ void card_read();
  void lz_uncompress();
  void yuv_convert();
  void chip_id();
 +void idioma_juego();
  void blz_uncompress();
++void gx_send();
++void gx_cmd();
  } // namespace ie1_hle
 diff --git a/runner/src/ie1_idiomas.cpp b/runner/src/ie1_idiomas.cpp
-index ddf62b5..200a567 100644
+index ddf62b5..9199004 100644
 --- a/runner/src/ie1_idiomas.cpp
 +++ b/runner/src/ie1_idiomas.cpp
 @@ -16,6 +16,7 @@
@@ -795,7 +1545,7 @@ index ddf62b5..200a567 100644
  
  namespace {
  uint32_t rd32(const std::vector<uint8_t>& r, std::size_t o) {
-@@ -143,10 +144,27 @@ void relanzar() {
+@@ -143,18 +144,44 @@ void relanzar() {
      std::wstring cmd = GetCommandLineW();
      STARTUPINFOW si{};
      si.cb = sizeof(si);
@@ -824,7 +1574,33 @@ index ddf62b5..200a567 100644
      }
  #endif
  }
-@@ -278,6 +296,26 @@ char g_mods_nombres[kMaxMods][64];
+ }  // namespace
+-extern "C" void ie1_reiniciar_programa() {
++extern "C" void ie1_reiniciar_programa() {  // IE1_REINICIO_LANZADOR2
+     static bool hecho = false;
+     if (hecho) return;
+     hecho = true;
++    // Abierto desde el lanzador (IE1_LANZADOR=1): el juego se cierra (guardando como al
++    // salir) y deja reiniciar.marca; el lanzador lo vuelve a abrir solo, sin ensenarse.
++    if (const char* l = std::getenv("IE1_LANZADOR"); l && *l == '1') {
++        std::remove("reinicio.pid");
++        if (std::FILE* m = std::fopen("reiniciar.marca", "wb")) { std::fputs("1\n", m); std::fclose(m); }
++        std::fprintf(stderr, "[menu] reiniciar: el lanzador vuelve a abrir el juego\n");
++        return;
++    }
++    // Sin lanzador (por ejemplo desde el .bat): se abre otra vez el mismo ejecutable.
+     // Las variables que vinieron de idiomas.cfg se quitan, para que el proceso
+     // nuevo vuelva a leer el archivo (por si el idioma se cambio en el menu).
+     for (const char* v : g_desde_cfg) poner_env(v, "");
+@@ -271,13 +298,38 @@ int host_redimensionar(void* c, size_t minimo) {
+     return 1;
+ }
+ void host_log(const char* t) { std::fprintf(stderr, "%s\n", t); }
+-constexpr int kMaxMods = 6;
++constexpr int kMaxMods = 12;  // IE1_MODS12
+ bool g_mods_hay = false;
+ int g_mods_n = 0;
+ char g_mods_nombres[kMaxMods][64];
  int g_mods_activos[kMaxMods];
  using FnGuardar = void (*)(const char (*)[64], const int*, int);
  FnGuardar g_mods_guardar = nullptr;
@@ -848,10 +1624,15 @@ index ddf62b5..200a567 100644
 +FnDibujar g_ov_dibujar = nullptr;
 +using FnToque = void (*)(int, int, int);
 +FnToque g_ov_toque = nullptr;
++// IE1_OVERLAY_VIGILAR: botones y tactil con el menu cerrado (el complemento puede quedarselos)
++using FnVigTeclas = int (*)(uint16_t);
++using FnVigToque = int (*)(int, int, int);
++FnVigTeclas g_ov_vig_teclas = nullptr;
++FnVigToque g_ov_vig_toque = nullptr;
  void ie1_mods_cargar(std::vector<uint8_t>& rom) {
  #if defined(_WIN32)
      wchar_t exe[MAX_PATH];
-@@ -300,6 +338,17 @@ void ie1_mods_cargar(std::vector<uint8_t>& rom) {
+@@ -300,6 +352,19 @@ void ie1_mods_cargar(std::vector<uint8_t>& rom) {
          g_mods_guardar = reinterpret_cast<FnGuardar>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_guardar_v1")));
          g_mods_hay = true;
      }
@@ -861,6 +1642,8 @@ index ddf62b5..200a567 100644
 +    g_ov_teclas = reinterpret_cast<FnTeclas>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_teclas_v1")));
 +    g_ov_dibujar = reinterpret_cast<FnDibujar>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_dibujar_v1")));
 +    g_ov_toque = reinterpret_cast<FnToque>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_overlay_toque_v1")));
++    g_ov_vig_teclas = reinterpret_cast<FnVigTeclas>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_vigilar_teclas_v1")));
++    g_ov_vig_toque = reinterpret_cast<FnVigToque>(reinterpret_cast<void*>(GetProcAddress(h, "ie1_mods_vigilar_toque_v1")));
 +    if (!(g_ov_disponible && g_ov_activo && g_ov_alternar && g_ov_teclas && g_ov_dibujar))
 +        g_ov_disponible = nullptr;
 +    // Se llama cada fotograma aunque no haya trucos: tambien da al complemento
@@ -869,7 +1652,7 @@ index ddf62b5..200a567 100644
  #else
      (void)rom;
  #endif
-@@ -312,6 +361,37 @@ void ie1_idiomas_componer(std::vector<uint8_t>& rom) {
+@@ -312,6 +377,39 @@ void ie1_idiomas_componer(std::vector<uint8_t>& rom) {
      ie1_mods_cargar(rom);
  }
  
@@ -899,6 +1682,8 @@ index ddf62b5..200a567 100644
 +extern "C" void ie1_overlay_alternar() { if (ie1_overlay_disponible()) g_ov_alternar(); }
 +extern "C" void ie1_overlay_teclas(uint16_t pulsados) { if (g_ov_disponible) g_ov_teclas(pulsados); }
 +extern "C" void ie1_overlay_toque(int x, int y, int abajo) { if (g_ov_disponible && g_ov_toque) g_ov_toque(x, y, abajo); }
++extern "C" int ie1_overlay_vigilar_teclas(uint16_t p) { return g_ov_vig_teclas ? g_ov_vig_teclas(p) : 0; }  // IE1_OVERLAY_VIGILAR
++extern "C" int ie1_overlay_vigilar_toque(int x, int y, int abajo) { return g_ov_vig_toque ? g_ov_vig_toque(x, y, abajo) : 0; }
 +extern "C" int ie1_overlay_dibujar(const uint32_t* a, int aw, const uint32_t* b, int bw,
 +                                   const uint32_t** sa, const uint32_t** sb) {
 +    return g_ov_disponible ? g_ov_dibujar(a, aw, b, bw, sa, sb) : 0;
@@ -907,6 +1692,26 @@ index ddf62b5..200a567 100644
  // API para el menu de Esc (parche_menu_mods.py)
  extern "C" int ie1_mods_hay() { return g_mods_hay ? 1 : 0; }
  extern "C" int ie1_mods_num() { return g_mods_n; }
+diff --git a/runner/src/io.cpp b/runner/src/io.cpp
+index 113c922..60fb9db 100644
+--- a/runner/src/io.cpp
++++ b/runner/src/io.cpp
+@@ -2906,9 +2906,12 @@ bool io_peripheral_savestate_import(const NdsIoPeripheralSaveState& in,
+     g_cart_backup.cmd = in.backup_cmd;
+     g_cart_backup.status = in.backup_status;
+     g_cart_backup.addr = in.backup_addr;
+-    g_cart_backup.dirty = in.backup_dirty != 0u;
+-    g_cart_persistence_detached =
+-        in.backup_persistence_detached != 0u;
++    // Parche local (parche_guardado_estados.py): al cargar un estado, la partida no queda
++    // separada ni pendiente; ie1_eur.sav se escribe cuando el juego guarda.
++    (void)in.backup_dirty;
++    (void)in.backup_persistence_detached;
++    g_cart_backup.dirty = false;
++    g_cart_persistence_detached = false;
+     g_cart_detached_warning_emitted = false;
+ 
+     g_spicnt = in.spicnt;
 diff --git a/runner/src/runtime_arm.cpp b/runner/src/runtime_arm.cpp
 index 2ed34b6..728e882 100644
 --- a/runner/src/runtime_arm.cpp
@@ -994,6 +1799,30 @@ index 2ed34b6..728e882 100644
      if (g_static_guard && !g_static_guard->invalidated &&
          guard_generation_changed(*g_static_guard)) {
          if (!refresh_guard_after_generation_change(*g_static_guard)) {
+diff --git a/runner/src/scheduler.cpp b/runner/src/scheduler.cpp
+index a52d8db..4d736ab 100644
+--- a/runner/src/scheduler.cpp
++++ b/runner/src/scheduler.cpp
+@@ -391,11 +391,18 @@ void scheduler_run_round() {
+     auto phase_start = round_start;
+ 
+     const uint64_t quantum=nds_native_event_quantum(
+-        nds_performance_execution()&&nds_native_options().events&&g_slot[0].started&&g_slot[1].started,
++        // Parche local (parche_ventanas_eventos.py v2): sin exigir el modelo "performance".
++        nds_native_options().events&&g_slot[0].started&&g_slot[1].started,
+         nds_cpu_halted(1),nds_halt_wake_pending(1),
+         nds_dma_cpu_stalled(0)||nds_dma_cpu_stalled(1),nds_gxfifo_stalled());
+     performance_window_active=quantum>kIterCap;
+     if(performance_window_active)++performance_windows;
++    if(performance_window_active&&(performance_windows==1u||performance_windows==1000u||
++       performance_windows==100000u||performance_windows==10000000u)) {  // parche_ventanas_diag.py
++        std::fprintf(stderr,"[ventanas] %llu rondas largas, %llu cortadas por la E/S\n",
++                     (unsigned long long)performance_windows,(unsigned long long)performance_fences);
++        std::fflush(stderr);
++    }
+     struct WindowEnd {~WindowEnd(){performance_window_active=false;}} window_end;
+     uint64_t planned = g_sys_timestamp + quantum;
+     if(performance_window_active)planned=std::min(planned,nds_next_timer_overflow_time());
 diff --git a/runner/src/wifi_net.cpp b/runner/src/wifi_net.cpp
 index 206aff3..2439640 100644
 --- a/runner/src/wifi_net.cpp

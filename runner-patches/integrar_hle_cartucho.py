@@ -48,6 +48,9 @@ struct Replacement {
 //   0x02174240  conversion de color de los videos (overlay 88, desactivado)
 //   0x02011B54  lectura del ID del chip del cartucho (88 bytes)
 //   0x02000950  descompresion hacia atras de overlays (MIi_UncompressBackward, 172 bytes)
+//   0x020091C8  envio de palabras a un registro fijo (MI_CpuSend32, 24 bytes): los
+//               comandos 3D al GXFIFO; 0x020091CC es su continuacion tras un atasco
+//   0x0202B608  funcion de comandos 3D del motor (220 bytes): a la lista o directo al GXFIFO
 // Devuelve la validacion propia de la rutina completa aunque la huella no
 // coincida, para que el runner vigile esas paginas y vuelva a intentarlo.
 Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb);
@@ -57,6 +60,8 @@ void yuv_convert();
 void chip_id();
 void idioma_juego();
 void blz_uncompress();
+void gx_send();
+void gx_cmd();
 } // namespace ie1_hle
 '''
 
@@ -78,6 +83,7 @@ SOURCE = r'''// HLE de la lectura del cartucho de Inazuma Eleven (EUR, YEEP).
 #include "hle_ie1_card.h"
 #include "hle_vector_math.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -90,6 +96,8 @@ SOURCE = r'''// HLE de la lectura del cartucho de Inazuma Eleven (EUR, YEEP).
 
 #include "sha1.h"
 #include "state.h"
+#include "io.h"
+#include "gpu3d.h"
 
 const std::vector<uint8_t>& ie1_hle_card_rom();   // definido en io.cpp
 
@@ -152,6 +160,61 @@ constexpr const char* kBlzSha1 = "bf25dc3dbcbee1fff63e0eee637c3360933aa857";
 std::array<uint8_t, kBlzSize> blz_proof{};
 NdsStaticValidation blz_validation{kBlzEntry, kBlzSize, blz_proof.data(), nullptr, 0};
 uint64_t blz_calls = 0;
+// Envio de palabras a un registro fijo (MI_CpuSend32 del SDK, 0x020091C8):
+// r0 = origen, r1 = destino (no avanza), r2 = bytes. El juego manda asi los
+// comandos 3D al GXFIFO (0x04000400): 0x0202B6D4 y otras ~280 llamadas. Cada
+// palabra al GXFIFO costaba una salida de la region nativa y una escritura de
+// E/S suelta; aqui se hace el bucle entero de una vez, con las mismas
+// escrituras, en el mismo orden y por el mismo camino del bus. Si el GXFIFO se
+// llena (la CPU se queda parada), se para justo despues de esa escritura y se
+// sigue en 0x020091CC (la vuelta del bucle) cuando el motor 3D lo vacia.
+// IE1_GX_HLE=0 lo desactiva (para comparar).
+constexpr uint32_t kSendEntry = 0x020091C8u;
+constexpr uint32_t kSendLoop = 0x020091CCu;
+constexpr uint32_t kSendSize = 0x18u;              // 24 bytes, sin constantes
+constexpr const char* kSendSha1 = "ae6f870471f3f8365211f530ed2cfb372d22a9b4";
+std::array<uint8_t, kSendSize> send_proof{};
+NdsStaticValidation send_validation{kSendEntry, kSendSize, send_proof.data(), nullptr, 0};
+uint64_t send_calls = 0, send_words = 0, send_stalls = 0, send_epilogos = 0;
+// Vuelta del envio: casi todas las llamadas (0x0202B6D4, la funcion de comandos 3D
+// 0x0202B608) vuelven a un "ldmia sp!, {..., pc}". En el modelo performance esa
+// instruccion suelta la ejecutaba el interprete (unas 5.000 veces por fotograma).
+// Si la instruccion de la vuelta es esa, se hace aqui mismo (mismas lecturas de la
+// pila, mismo orden) y se salta directamente al que llamo a la funcion.
+// IE1_GX_EPILOGO=0 lo desactiva (para comparar).
+bool gx_epilogo_on() {
+    static const bool on = [] { const char* e = std::getenv("IE1_GX_EPILOGO"); return !(e && *e == '0'); }();
+    return on;
+}
+// Funcion de comandos 3D del motor (0x0202B608): r0 = comando, r1 = parametros,
+// r2 = numero de parametros. Estado en 0x020C2380: [0] = lista (0 = sin lista),
+// [4] = DMA de la lista en curso. Con DMA en curso y sitio en la lista, anade el
+// comando a la lista (copia los parametros como 0x0200922C, MI_CpuCopy32); sin DMA
+// y sin nada pendiente, escribe el comando en 0x04000400 y manda los parametros
+// (como 0x020091C8). Lo demas (esperar a la DMA o vaciar la lista antes) lo hace
+// el codigo original: se guarda la pila como su primera instruccion y se sigue
+// en 0x0202B60C. Cada llamada ahorraba dos saltos del despachador.
+// IE1_GX_CMD=0 lo desactiva (para comparar).
+constexpr uint32_t kCmdEntry = 0x0202B608u;
+constexpr uint32_t kCmdBody = 0x0202B60Cu;
+constexpr uint32_t kCmdSize = 0xDCu;               // 220 bytes, con sus dos constantes
+constexpr const char* kCmdSha1 = "c63239ccf3aab4a9ed6294cf893457959eef80bb";
+constexpr uint32_t kCopyEntry = 0x0200922Cu;       // MI_CpuCopy32 que usa para la lista
+constexpr uint32_t kCopySize = 0x38u;
+constexpr const char* kCopySha1 = "96ec8ebd292eb69968cc2a8ffe7cd95c7893540a";
+constexpr uint32_t kCmdState = 0x020C2380u;
+std::array<uint8_t, kCmdSize> cmd_proof{};
+std::array<uint8_t, kCopySize> copy_proof{};
+NdsStaticValidation cmd_validation{kCmdEntry, kCmdSize, cmd_proof.data(), nullptr, 0};
+uint64_t cmd_calls = 0, cmd_lista = 0, cmd_directo = 0, cmd_resto = 0;
+bool gx_cmd_on() {
+    static const bool on = [] { const char* e = std::getenv("IE1_GX_CMD"); return !(e && *e == '0'); }();
+    return on;
+}
+bool gx_hle_on() {
+    static const bool on = [] { const char* e = std::getenv("IE1_GX_HLE"); return !(e && *e == '0'); }();
+    return on;
+}
 int supported = -1;
 uint64_t calls = 0, bytes = 0;
 
@@ -283,6 +346,29 @@ Replacement resolve_card(NdsCpu cpu, uint32_t pc, bool thumb) {
         chip_proof = live;
         return {chip_id, &chip_validation};
     }
+    if ((pc == kSendEntry || pc == kSendLoop) && gx_hle_on()) {
+        std::array<uint8_t, kSendSize> live{};
+        if (!bus_range_has_write_provenance(kSendEntry, kSendSize) ||
+            !bus_debug_copy(0, kSendEntry, live.data(), kSendSize) ||
+            (live != send_proof && gba::sha1(live.data(), kSendSize).hex() != kSendSha1))
+            return {nullptr, &send_validation};
+        send_proof = live;
+        return {gx_send, &send_validation};
+    }
+    if (pc == kCmdEntry && gx_cmd_on() && gx_hle_on()) {
+        std::array<uint8_t, kCmdSize> live{};
+        std::array<uint8_t, kCopySize> copia{};
+        if (!bus_range_has_write_provenance(kCmdEntry, kCmdSize) ||
+            !bus_debug_copy(0, kCmdEntry, live.data(), kCmdSize) ||
+            (live != cmd_proof && gba::sha1(live.data(), kCmdSize).hex() != kCmdSha1))
+            return {nullptr, &cmd_validation};
+        if (!bus_debug_copy(0, kCopyEntry, copia.data(), kCopySize) ||
+            (copia != copy_proof && gba::sha1(copia.data(), kCopySize).hex() != kCopySha1))
+            return {nullptr, &cmd_validation};
+        cmd_proof = live;
+        copy_proof = copia;
+        return {gx_cmd, &cmd_validation};
+    }
     if (kYuvHle && pc == kYuvEntry) {
         std::array<uint8_t, kYuvSize> live{};
         if (!bus_range_has_write_provenance(pc, kYuvSize) ||
@@ -345,6 +431,300 @@ void blz_uncompress() {
     g_cpu.R[3] = r3;
     g_cpu.R[12] = r12;
     nds_hle::finish(64u + static_cast<uint32_t>(written) * 4u);
+}
+
+// Envio en lote al GXFIFO (0x04000400): el mismo camino nativo que usa la DMA
+// (nds_gpu3d_command_batch, NDS_GX_COMMAND_CACHE): lee las palabras de la RAM
+// principal y las mete ya decodificadas, sin pasar por el bus palabra a palabra.
+// Para en el primer atasco real, como el bucle original. Solo RAM principal
+// (0x02000000-0x023FFFFF), alineada, y sin cruzar una pagina de 4 KB por lote.
+// Devuelve las palabras aceptadas; 'ok' = false si el lote no esta disponible
+// (runner sin NDS_GX_COMMAND_CACHE) o la zona no vale: entonces se usa el bus.
+// IE1_GX_LOTE=0 lo desactiva (para comparar).
+uint64_t lote_llamadas = 0, lote_palabras = 0;
+// Escritura directa al motor 3D: nds_io_write, con la ARM9 activa y una direccion
+// del motor 3D (0x04000400-0x040006A3), solo hace nds_gpu3d_write (io.cpp, tras
+// el corte de las rondas largas, que no aplica al motor 3D). Los atajos llaman
+// directamente a nds_gpu3d_write y se ahorran el reparto del bus y de la E/S.
+// IE1_GX_DIRECTO=0 lo desactiva (para comparar).
+bool gx_directo_on() {
+    static const bool on = [] { const char* e = std::getenv("IE1_GX_DIRECTO"); return !(e && *e == '0'); }();
+    return on;
+}
+inline void gx_w(uint32_t addr, uint32_t value) {
+    if (gx_directo_on()) nds_gpu3d_write(addr, value, 4u);
+    else bus_write_u32(addr, value);
+}
+bool gx_lote_on() {
+    static const bool on = [] { const char* e = std::getenv("IE1_GX_LOTE"); return !(e && *e == '0'); }();
+    return on;
+}
+uint32_t gx_lote(uint32_t src, uint32_t count, bool& ok) {
+    ok = false;
+    if (!count || !gx_lote_on() || (src & 3u) || src < 0x02000000u ||
+        uint64_t{src} + uint64_t{count} * 4u > 0x02400000u)
+        return 0;
+    uint32_t done = 0;
+    while (done < count) {
+        const uint32_t at = src + done * 4u;
+        const uint32_t page = (4096u - (at & 4095u)) / 4u;
+        const uint32_t chunk = std::min(count - done, page);
+        const uint32_t c = nds_gpu3d_command_batch(at, chunk, 0, chunk, true);
+        if (c == 0) {                       // sin lote en este runner
+            if (done == 0) return 0;
+            break;
+        }
+        done += c;
+        if (c < chunk || nds_gxfifo_stalled()) break;
+    }
+    ok = true;
+    if (++lote_llamadas == 1u)
+        std::fprintf(stderr, "[hle] Inazuma Eleven: comandos 3D en lote (como la DMA)\n");
+    lote_palabras += done;
+    return done;
+}
+
+// Rutina original (0x020091C8, MI_CpuSend32):
+//   add r12, r0, r2 / bucle: cmp r0, r12 / ldmlt r0!, {r2} / strlt r2, [r1] / blt bucle / bx lr
+// Al terminar: r0 = r12 = final, r2 = ultima palabra, banderas de "cmp r0, r12".
+void gx_send() {
+    const bool vuelta = g_cpu.R[15] == kSendLoop;   // continuacion tras un atasco
+    uint32_t src = g_cpu.R[0];
+    const uint32_t dst = g_cpu.R[1];
+    const uint32_t end = vuelta ? g_cpu.R[12] : src + g_cpu.R[2];
+    uint32_t last = g_cpu.R[2];
+    uint32_t words = 0;
+    const bool gx = dst >= 0x04000400u && dst < 0x04000440u;
+    if (!vuelta) ++send_calls;
+    if (send_calls == 1 && !vuelta && words == 0)
+        std::fprintf(stderr, "[hle] Inazuma Eleven: envio de comandos 3D HLE en uso\n");
+    if (dst == 0x04000400u && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+        bool ok = false;
+        const uint32_t n = gx_lote(src, (end - src) >> 2, ok);
+        if (ok && n) {
+            src += n << 2;
+            last = bus_read_u32(src - 4u);
+            words += n;
+            if (nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+                ++send_stalls;
+                send_words += words;
+                g_cpu.R[0] = src;
+                g_cpu.R[2] = last;
+                g_cpu.R[12] = end;
+                g_cpu.R[15] = kSendLoop;
+                runtime_tick(8u * words);
+                return;
+            }
+        }
+    }
+    while (static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+        last = bus_read_u32(src);
+        src += 4u;
+        if (gx) gx_w(dst, last); else bus_write_u32(dst, last);
+        ++words;
+        if (gx && nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+            // GXFIFO lleno: la CPU se para aqui, como tras el strlt original
+            ++send_stalls;
+            send_words += words;
+            g_cpu.R[0] = src;
+            g_cpu.R[2] = last;
+            g_cpu.R[12] = end;
+            g_cpu.R[15] = kSendLoop;
+            runtime_tick(8u * words);
+            return;
+        }
+    }
+    send_words += words;
+    g_cpu.R[0] = src;
+    g_cpu.R[2] = last;
+    g_cpu.R[12] = end;
+    // banderas de cmp r0, r12
+    const uint32_t res = src - end;
+    uint32_t f = g_cpu.cpsr & ~0xF0000000u;   // N Z C V
+    if (res & 0x80000000u) f |= 0x80000000u;
+    if (res == 0u) f |= 0x40000000u;
+    if (src >= end) f |= 0x20000000u;
+    if (((src ^ end) & (src ^ res)) & 0x80000000u) f |= 0x10000000u;
+    g_cpu.cpsr = f;
+    const uint32_t lr = g_cpu.R[14];
+    if (gx_epilogo_on() && (lr & 3u) == 0u && lr >= 0x02000000u && lr < 0x02400000u) {
+        const uint32_t op = bus_read_u32(lr);
+        // ldmia sp!, {lista, pc} sin condicion y sin sp en la lista
+        if ((op & 0xFFFF8000u) == 0xE8BD8000u && (op & 0x2000u) == 0u) {
+            uint32_t sp = g_cpu.R[13];
+            uint32_t n = 1u;
+            for (uint32_t r = 0; r < 15u; ++r) {
+                if (op & (1u << r)) { g_cpu.R[r] = bus_read_u32(sp); sp += 4u; ++n; }
+            }
+            const uint32_t target = bus_read_u32(sp);
+            sp += 4u;
+            g_cpu.R[13] = sp;
+            if (++send_epilogos == 1u)
+                std::fprintf(stderr, "[hle] Inazuma Eleven: vuelta del envio 3D sin interprete (0x%08X)\n", lr);
+            g_cpu.R[15] = target & ((target & 1u) ? ~1u : ~3u);
+            g_cpu.cpsr = (g_cpu.cpsr & ~CPSR_T_BIT) | ((target & 1u) ? CPSR_T_BIT : 0u);
+            runtime_tick(8u + 8u * words + 2u + n);
+            if (runtime_unwinding()) return;
+            if (runtime_call_should_return(g_cpu.R[15])) return;
+            runtime_dispatch_with_exchange(target);
+            return;
+        }
+    }
+    nds_hle::finish(8u + 8u * words);
+}
+
+namespace {
+// banderas de "cmp a, b"
+uint32_t flags_cmp(uint32_t cpsr, uint32_t a, uint32_t b) {
+    const uint32_t res = a - b;
+    uint32_t f = cpsr & ~0xF0000000u;
+    if (res & 0x80000000u) f |= 0x80000000u;
+    if (res == 0u) f |= 0x40000000u;
+    if (a >= b) f |= 0x20000000u;
+    if (((a ^ b) & (a ^ res)) & 0x80000000u) f |= 0x10000000u;
+    return f;
+}
+// vuelta al que llamo (el "ldmia sp!, {r3-r7, pc}" de la funcion, sin marco guardado)
+void cmd_return(uint32_t target, uint32_t cycles) {
+    g_cpu.R[15] = target & ((target & 1u) ? ~1u : ~3u);
+    g_cpu.cpsr = (g_cpu.cpsr & ~CPSR_T_BIT) | ((target & 1u) ? CPSR_T_BIT : 0u);
+    runtime_tick(cycles);
+    if (runtime_unwinding()) return;
+    if (runtime_call_should_return(g_cpu.R[15])) return;
+    runtime_dispatch_with_exchange(target);
+}
+// el marco que guarda la primera instruccion: stmdb sp!, {r3, r4, r5, r6, r7, lr}
+void cmd_frame() {
+    uint32_t sp = g_cpu.R[13] - 24u;
+    g_cpu.R[13] = sp;
+    for (uint32_t r : {3u, 4u, 5u, 6u, 7u, 14u}) { bus_write_u32(sp, g_cpu.R[r]); sp += 4u; }
+}
+} // namespace
+
+// Rutina original (0x0202B608): ver la explicacion junto a kCmdEntry.
+void gx_cmd() {
+    const uint32_t cmd = g_cpu.R[0], par = g_cpu.R[1], cnt = g_cpu.R[2];
+    const uint32_t caller = g_cpu.R[14];
+    ++cmd_calls;
+    if (cmd_calls == 1u)
+        std::fprintf(stderr, "[hle] Inazuma Eleven: funcion de comandos 3D HLE en uso\n");
+    const uint32_t lista = bus_read_u32(kCmdState);
+    const uint32_t dma = bus_read_u32(kCmdState + 4u);
+    if (lista != 0u && dma != 0u) {
+        const uint32_t n = bus_read_u32(lista);
+        const uint32_t n1 = n + 1u;
+        if (n1 + cnt <= 0xC0u) {
+            // a la lista: [lista] = n + 1, comando en lista + 4 + 4n, parametros detras
+            ++cmd_lista;
+            bus_write_u32(lista, n1);
+            const uint32_t at = bus_read_u32(kCmdState) + (n << 2);
+            bus_write_u32(at + 4u, cmd);
+            if (cnt == 0u) {
+                g_cpu.R[0] = at;
+                g_cpu.R[1] = n1 + cnt;
+                g_cpu.R[2] = n;                    // r3-r7 vuelven a ser los del que llamo
+                g_cpu.cpsr = flags_cmp(g_cpu.cpsr, 0u, 0u);
+                cmd_return(caller, 24u);
+                return;
+            }
+            const uint32_t l2 = bus_read_u32(kCmdState);
+            const uint32_t k = bus_read_u32(l2);
+            uint32_t dst = l2 + 4u + (k << 2);
+            uint32_t src = par;
+            const uint32_t bytes = cnt << 2;
+            const uint32_t end = dst + bytes;
+            const uint32_t r12 = dst + ((bytes >> 5) << 5);
+            uint32_t r2 = bytes;
+            while (static_cast<int32_t>(dst) < static_cast<int32_t>(r12)) {
+                uint32_t w[8];
+                for (uint32_t i = 0; i < 8u; ++i) w[i] = bus_read_u32(src + 4u * i);
+                for (uint32_t i = 0; i < 8u; ++i) bus_write_u32(dst + 4u * i, w[i]);
+                r2 = w[0];
+                src += 32u; dst += 32u;
+            }
+            while (static_cast<int32_t>(dst) < static_cast<int32_t>(end)) {
+                r2 = bus_read_u32(src);
+                bus_write_u32(dst, r2);
+                src += 4u; dst += 4u;
+            }
+            const uint32_t l3 = bus_read_u32(kCmdState);
+            const uint32_t total = bus_read_u32(l3) + cnt;
+            bus_write_u32(l3, total);
+            g_cpu.R[0] = total;
+            g_cpu.R[1] = l3;
+            g_cpu.R[2] = r2;
+            g_cpu.R[12] = r12;
+            g_cpu.R[14] = 0x0202B678u;                 // lr que deja el bl a la copia
+            g_cpu.cpsr = flags_cmp(g_cpu.cpsr, dst, end);
+            cmd_return(caller, 40u + 4u * cnt);
+            return;
+        }
+    }
+    const bool directo = (dma == 0u) && (lista == 0u || bus_read_u32(lista) == 0u);
+    if (!directo) {
+        // esperar a la DMA o vaciar la lista: lo hace el codigo original
+        ++cmd_resto;
+        cmd_frame();
+        g_cpu.R[15] = kCmdBody;
+        runtime_tick(2u);
+        return;
+    }
+    // directo: comando a 0x04000400 y parametros con el envio (0x020091C8)
+    ++cmd_directo;
+    constexpr uint32_t fifo = 0x04000400u;
+    gx_w(fifo, cmd);
+    auto atasco = [&](uint32_t src, uint32_t last, uint32_t end, uint32_t pc, uint32_t words) {
+        // el motor 3D esta lleno: queda como dentro de la funcion original
+        cmd_frame();
+        g_cpu.R[3] = lista; g_cpu.R[4] = cnt; g_cpu.R[5] = par; g_cpu.R[6] = cmd;
+        g_cpu.R[7] = kCmdState;
+        g_cpu.R[0] = src; g_cpu.R[1] = fifo; g_cpu.R[2] = last;
+        if (pc == kSendLoop) g_cpu.R[12] = end;     // antes del bl, r12 sigue como estaba
+        g_cpu.R[14] = 0x0202B6D8u;
+        g_cpu.R[15] = pc;
+        ++send_stalls;
+        runtime_tick(8u + 8u * words);
+    };
+    uint32_t src = par;
+    const uint32_t end = par + (cnt << 2);
+    if (nds_gxfifo_stalled() && cnt != 0u) {
+        atasco(par, cnt << 2, end, kSendEntry, 0u);  // falta el bl al envio: r2 = bytes
+        return;
+    }
+    uint32_t last = cnt << 2, words = 0;
+    if (static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+        bool ok = false;
+        const uint32_t n = gx_lote(src, (end - src) >> 2, ok);
+        if (ok && n) {
+            src += n << 2;
+            last = bus_read_u32(src - 4u);
+            words += n;
+            if (nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+                send_words += words;
+                atasco(src, last, end, kSendLoop, words);
+                return;
+            }
+        }
+    }
+    while (static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+        last = bus_read_u32(src);
+        src += 4u;
+        gx_w(fifo, last);
+        ++words;
+        if (nds_gxfifo_stalled() && static_cast<int32_t>(src) < static_cast<int32_t>(end)) {
+            send_words += words;
+            atasco(src, last, end, kSendLoop, words);
+            return;
+        }
+    }
+    send_words += words;
+    g_cpu.R[0] = src;
+    g_cpu.R[1] = fifo;
+    g_cpu.R[2] = last;
+    g_cpu.R[12] = end;
+    g_cpu.R[14] = 0x0202B6D8u;                         // lr que deja el bl al envio
+    g_cpu.cpsr = flags_cmp(g_cpu.cpsr, src, end);
+    cmd_return(caller, 16u + 8u * words);
 }
 
 // Rutina original (0x02011B54): envia el comando B8, espera el dato sondeando

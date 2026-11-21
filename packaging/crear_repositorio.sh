@@ -50,7 +50,7 @@ echo "=== 3. Cambios exactos del runner (diff contra las versiones fijadas) ==="
 diff_completo() {   # $1 repositorio git, $2 salida: cambios + archivos nuevos (sin tocar su indice)
     local idx; idx=$(mktemp)
     cp "$1/.git/index" "$idx"
-    local fuera=(':!*build*' ':!*.bin' ':!*.nds' ':!*.sav' ':!*.nss' ':!*.log' ':!*.json' ':!*.jsonl' ':!*generated*')
+    local fuera=(':!*build*' ':!*.bin' ':!*.ico' ':!*ie1_icono.rc' ':!*.nds' ':!*.sav' ':!*.nss' ':!*.log' ':!*.json' ':!*.jsonl' ':!*generated*')
     GIT_INDEX_FILE="$idx" git -C "$1" add -A -N -- . "${fuera[@]}" 2>/dev/null || true
     GIT_INDEX_FILE="$idx" git -C "$1" diff --binary -- . "${fuera[@]}" > "$2"
     rm -f "$idx"
@@ -61,13 +61,14 @@ diff_completo "$NDS" "$REPO/runner-patches/ndsrecomp.diff"
 
 echo "=== 4. Lanzador, mods propios, configuracion y coberturas ==="
 cp "$IE1"/lanzador/lanzador.cpp "$IE1"/lanzador/lanzador_ui.hpp "$REPO/launcher/"
+[ -f "$IE1/lanzador/icono_rom.cpp" ] && cp "$IE1/lanzador/icono_rom.cpp" "$REPO/launcher/"   # icono del .exe (sale de la ROM)
 if [ -d "$IE1/mods/entrenamiento_libre" ]; then
     mkdir -p "$REPO/mods/entrenamiento_libre"
     cp "$IE1"/mods/entrenamiento_libre/mod.txt "$IE1"/mods/entrenamiento_libre/*.argb "$REPO/mods/entrenamiento_libre/" 2>/dev/null || true
 fi
-# del mod de niveles solo su mod.txt (los graficos y guiones salen de las ROM)
-[ -f "$IE1/mods/niveles_supertecnicas/mod.txt" ] && mkdir -p "$REPO/mods/niveles_supertecnicas" && \
-    cp "$IE1/mods/niveles_supertecnicas/mod.txt" "$REPO/mods/niveles_supertecnicas/"
+# de Mecanicas IE2 solo su ficha y los dos .cfg (los graficos y guiones salen de las ROM)
+[ -f "$IE1/mods/mecanicas_ie2/mod.txt" ] && mkdir -p "$REPO/mods/mecanicas_ie2" && \
+    cp "$IE1/mods/mecanicas_ie2/mod.txt" "$IE1/mods/mecanicas_ie2/tiro.cfg" "$IE1/mods/mecanicas_ie2/talentos.cfg" "$IE1/mods/mecanicas_ie2/capitan.cfg" "$IE1/mods/mecanicas_ie2/exp_x2.cfg" "$REPO/mods/mecanicas_ie2/"
 cp "$IE1"/configs/*.toml "$REPO/config/" 2>/dev/null || true
 cp "$IE1/run/game.toml" "$REPO/config/"
 cp "$IE1"/run/*coverage*.json "$REPO/coverage/" 2>/dev/null || true
@@ -75,7 +76,7 @@ echo "   $(ls "$REPO/coverage" | wc -l) archivos de cobertura (solo direcciones)
 
 echo "=== 5. Comprobacion: nada del juego ni personal ==="
 fallos=0
-for patron in '*.nds' '*.sav' '*.nss' '*.pkb' '*.pkh' '*.pac_' '*.SAD' '*.NFTR' '*.exe' '*.dll' \
+for patron in '*.nds' '*.sav' '*.nss' '*.pkb' '*.pkh' '*.pac_' '*.SAD' '*.NFTR' '*.exe' '*.dll' '*.ico' \
               'controles.cfg' 'lanzador.cfg' 'ie1_menu.cfg' 'idiomas.cfg' 'firmware_state.bin' 'generated-identity.bin'; do
     if find "$REPO" -path "$REPO/.git" -prune -o -name "$patron" -print | grep -q .; then
         echo "   ATENCION: hay archivos '$patron'"; fallos=1
@@ -89,5 +90,7 @@ fi
 du -sh "$REPO" | awk '{print "Tamano: " $1}'
 echo
 echo "Listo. Para subirlo (la primera vez), en esa carpeta:"
-echo "   git init -b main && git add . && git commit -m \"InazumaElevenRecomp v1.0\""
+echo "   git init -b main && git add . && git commit -m \"InazumaElevenRecomp v1.1\""
 echo "   git remote add origin https://github.com/2002-source/InazumaElevenRecomp.git && git push -u origin main"
+echo "Si ya estaba subido (v1.0), en esa carpeta:"
+echo "   git add -A && git commit -m \"InazumaElevenRecomp v1.1\" && git push"

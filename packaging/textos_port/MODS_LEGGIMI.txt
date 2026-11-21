@@ -1,0 +1,89 @@
+MOD - INAZUMA ELEVEN RECOMP  v1.1
+=================================
+(English: README.txt - Español: LEEME.txt - Français : LISEZMOI.txt -
+Deutsch: LIESMICH.txt)
+
+Attiva o disattiva le mod nel launcher (Mod) o nel menu Esc del gioco (Mod).
+Le modifiche si applicano all'avvio del gioco o dopo Esc > Sistema > Riavvia.
+Nel launcher, premi Tab o fai clic destro su una mod per vedere cosa fa.
+mods.cfg elenca le mod attive, una per riga. Il preparatore attiva tutte le
+mod incluse tranne "Passione e Amicizia al massimo".
+
+
+ALLENAMENTO LIBERO  (cartella: entrenamiento_libre)
+  Un allenatore in cima alla Torre apre un menu per allenare i tuoi
+  giocatori: PE, PT e statistiche in cambio di Passione (450 per punto).
+  Y: il giocatore sale di livello pagando Passione (225 per ogni punto di
+     statistica guadagnato, almeno 100 per livello); statistiche, PE, PT e
+     tecniche sono quelle che dà il gioco.
+  X: il giocatore torna gratis al livello 1: conserva le sue tecniche e perde
+     tutto l'allenamento (con Meccaniche IE2, le tecniche tornano a 0 usi).
+  Come si ottiene: completa la storia (vinci il Football Frontier) e sali in
+  cima alla Torre.
+  Creata da: la tua ROM inglese.
+
+MECCANICHE IE2  (cartella: mecanicas_ie2)
+  Le meccaniche di Inazuma Eleven 2, con il codice del gioco stesso (era
+  disattivato):
+  - Livelli delle tecniche: salgono di livello con l'uso (avviso "Liv +" e il
+    segno del livello accanto al nome, nei menu e quando si usano).
+  - Tiro: pulsante di tiro sul touch screen (spostabile), tiri da lontano da
+    fuori area (segno T accanto al nome) e l'area di tiro blu.
+  - Blocchi dei tiri con tecniche di difesa o di tiro (segno B).
+  - Talenti con il loro effetto in partita.
+  - Dopo la storia, Mark non è più fisso: può lasciare la squadra e il primo
+    posto.
+  - Negli incontri, vincere con 5 o più gol di scarto senza subirne raddoppia
+    l'esperienza ("x2!!" su ogni giocatore, totale in magenta).
+  Il salvataggio non cambia, tranne il numero di usi di ogni tecnica (il gioco
+  lo salvava già).
+  Come si ottiene: sempre attiva.
+  Creata da: la tua ROM inglese (più i dati di IE2 già inclusi).
+
+POTENZA NELLE TECNICHE  (cartella: valor_escenas)
+  Mostra la potenza totale di ogni giocatore nelle scene delle tecniche: i due
+  valori nei duelli di dribbling, difesa e tiro-blocco, quello del tiro e,
+  quando arriva al portiere, con quanta potenza arriva (distanza compresa)
+  contro la parata. Il vincitore appare in rosso.
+  Come si ottiene: sempre attiva, in qualsiasi partita.
+
+OSSERVAZIONE ISTANTANEA  (cartella: ojeo_instantaneo)
+  Quando Celia o Nelly cercano giocatori per te, la chiamata arriva subito
+  invece che dopo diversi minuti di gioco.
+  Come si ottiene: sempre attiva.
+  Creata da: la tua ROM inglese.
+
+FILTRI DELLE TECNICHE  (cartella: filtros_supertecnicas)
+  Pulsante X "Filtri" nell'elenco dei quaderni delle tecniche (Inventario >
+  Tecniche > Impara): filtra per tipo ed elemento e ordina per PT o per nome.
+  Come si ottiene: sempre attiva.
+
+COLORI PER AFFINITÀ  (cartella: colores_afinidad)
+  I nomi delle tecniche appaiono nel colore del loro elemento, come in Victory
+  Road: fuoco rosso, aria blu, bosco verde e montagna marrone; i talenti
+  viola. Sul cartello della tecnica, sui pulsanti in partita e nei menu.
+  Come si ottiene: sempre attiva.
+
+VOCI GIAPPONESI  (cartella: voces_jp)
+  Le voci giapponesi originali: filmati (e l'opening giapponese) e le voci dei
+  giocatori in partita.
+  Come si ottiene: sempre attiva una volta creata.
+  Creata da: la ROM giapponese (Inazuma Eleven, codice YEEJ).
+
+PASSIONE E AMICIZIA AL MASSIMO  (cartella: pasion_amistad_max) - disattivata all'inizio
+  Mantiene Passione e Amicizia a 999999. Attivala solo se vuoi: ciò che
+  guadagni mentre è attiva resta nel salvataggio.
+
+
+SE UNA MOD MANCA O NON FA NULLA
+  Trascina di nuovo le ROM su "PREPARAR - arrastra aqui tus ROM.bat" (nella
+  cartella principale). Ricrea le mod a partire da esse:
+  - Allenamento libero, Meccaniche IE2 o Osservazione istantanea ... trascina
+                                                                     la ROM
+                                                                     inglese
+                                                                     (YEEP).
+  - Voci giapponesi ................................................ trascina
+                                                                     la ROM
+                                                                     giapponese
+                                                                     (YEEJ).
+  Poi controlla che la mod sia attiva (launcher > Mod).

@@ -29,7 +29,9 @@ def main():
     huecos, verificar, cadenas, punteros = [], [], [], []
     en_sitio, sin_traducir = [], []
     reservados = set()
-    rp = os.path.join("run", f"cadenas_reservadas.json")
+    rp = os.path.join("run", f"cadenas_reservadas_{idioma}.json")
+    if not os.path.exists(rp):
+        rp = os.path.join("run", "cadenas_reservadas.json")
     if os.path.exists(rp):
         reservados = {int(x, 16) for x in json.load(open(rp))}
     for k, v in datos.items():
@@ -61,6 +63,16 @@ def main():
     extra = {
         "es": {0x020B02E0: b"%s\n3.~", 0x020B02F8: b"%s\n1.~", 0x020B0318: b"%s\n2.~",
                0x020B0358: b"%s 1.~", 0x020B0398: b"%s 3.~", 0x020B03A0: b"%s 2.~"},
+        # Francia: 1.er curso = 5e, 2.o = 4e, 3.o = 3e (como en la ROM francesa: "%s,\n5e")
+        "fr": {0x020B02E0: b"%s,\n3e", 0x020B02F8: b"%s,\n5e", 0x020B0318: b"%s,\n4e",
+               0x020B0358: b"%s, 5e", 0x020B0398: b"%s, 3e", 0x020B03A0: b"%s, 4e"},
+        # Alemania: 7., 8. y 9. Klasse (la ROM alemana pone "%s,\n7. Klasse", que aqui no
+        # cabe: solo hay sitio para 7 letras)
+        "de": {0x020B02E0: b"%s\n9.Kl", 0x020B02F8: b"%s\n7.Kl", 0x020B0318: b"%s\n8.Kl",
+               0x020B0358: b"%s 7.Kl", 0x020B0398: b"%s 9.Kl", 0x020B03A0: b"%s 8.Kl"},
+        # Italia: la ROM italiana pone "%s\n1° anno" ("°" es 81 8B); aqui caben 7 letras: "%s\n1°"
+        "it": {0x020B02E0: b"%s\n3\x81\x8b", 0x020B02F8: b"%s\n1\x81\x8b", 0x020B0318: b"%s\n2\x81\x8b",
+               0x020B0358: b"%s 1\x81\x8b", 0x020B0398: b"%s 3\x81\x8b", 0x020B03A0: b"%s 2\x81\x8b"},
     }
     for a, es in extra.get(idioma, {}).items():
         o = a - BASE

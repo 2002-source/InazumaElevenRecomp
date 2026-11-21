@@ -6,9 +6,12 @@ Preparador del port de Inazuma Eleven (arrastra tus ROM sobre
 Reconoce cada ROM por su huella y hace lo que corresponda:
   - Inazuma Eleven (Europa, ingles)         -> la ROM base del port   [OBLIGATORIA]
   - Inazuma Eleven (Europa, espanol)        -> paquete de idioma espanol (textos y voces)
+  - Inazuma Eleven (Europa, frances)        -> paquete de idioma frances
+  - Inazuma Eleven (Europa, aleman)         -> paquete de idioma aleman
+  - Inazuma Eleven (Europa, italiano)       -> paquete de idioma italiano
   - Inazuma Eleven (Japon)                   -> mod de voces japonesas (opcional)
-Con la ROM base se completan los mods incluidos (NPC entrenador y niveles de
-supertecnicas). Una ROM del IE2 no hace falta (los mods ya traen lo necesario).
+Con la ROM base se completan los mods incluidos (Entrenamiento libre, Mecanicas IE2
+y Ojeo instantaneo). Una ROM del IE2 no hace falta (los mods ya traen lo necesario).
 
 No modifica ninguna ROM. Todo lo generado queda dentro de la carpeta del port.
 Se puede volver a ejecutar cuando quieras (por ejemplo, para anadir el espanol
@@ -25,6 +28,13 @@ sys.path.insert(0, SCRIPTS)
 
 SHA_IE1_EN = "d55169c0b93d26b4037379d3b81a61b5404945e5"
 SHA_IE1_ES = "1977bf71a45a9ab654427f359eb7fbaa62d97ebe"
+# idiomas que se sacan de las otras versiones europeas (por su codigo de juego)
+IDIOMAS_EU = {"YEEF": ("fr", "frances / French"), "YEED": ("de", "aleman / German"),
+              "YEEI": ("it", "italiano / Italian")}
+NOMBRE_IDIOMA = {"es": "espanol / Spanish", "fr": "frances / French", "de": "aleman / German",
+                 "it": "italiano / Italian"}
+# mods incluidos que se activan solos (los que no salen de una ROM); los trucos no
+MODS_INCLUIDOS = ["ojeo_instantaneo", "valor_escenas", "filtros_supertecnicas", "colores_afinidad"]
 
 
 def sha1(ruta):
@@ -58,6 +68,9 @@ def identificar(ruta):
     h = sha1(ruta)
     if h == SHA_IE1_EN: return "ie1_en", "Inazuma Eleven (Europa, ingles)"
     if h == SHA_IE1_ES: return "ie1_es", "Inazuma Eleven (Europa, espanol)"
+    if titulo == "INAZUMA11" and codigo in IDIOMAS_EU:
+        idioma, nombre = IDIOMAS_EU[codigo]
+        return "ie1_" + idioma, f"Inazuma Eleven (Europa, {nombre})"
     if titulo.startswith("INAZUMA") and codigo == "YEEJ":
         return "ie1_jp", "Inazuma Eleven (Japon) - voces japonesas / Japanese voices"
     if titulo == "INAZUMA11" and codigo.startswith("BE"):
@@ -69,11 +82,32 @@ def identificar(ruta):
     return None, f"no es una ROM de Inazuma Eleven / not an Inazuma Eleven ROM ({titulo} {codigo})"
 
 
-def ejecutar(script, *args, cwd=TRABAJO):
+def ejecutar(script, *args, cwd=TRABAJO, obligatorio=True):
     print(f"   > {script} {' '.join(os.path.basename(a) if os.path.isabs(a) else a for a in args)}")
     r = subprocess.run([sys.executable, os.path.join(SCRIPTS, script), *args], cwd=cwd)
     if r.returncode != 0:
+        if not obligatorio:
+            print(f"   (aviso: {script} no termino; se sigue sin esa parte / {script} did not finish; skipped)")
+            return False
         raise SystemExit(f"Fallo {script}; revisa los mensajes de arriba. / {script} failed; check the messages above.")
+    return True
+
+
+def paquete_idioma(rom, idioma):
+    """Paquete de idioma (textos, imagenes con texto y voces) y textos del codigo."""
+    es_n, en_n = NOMBRE_IDIOMA[idioma].split(" / ")
+    print(f"\n=== Idioma {es_n} / {en_n} language ===")
+    ejecutar("crear_paquete_idioma.py", rom, idioma, "--base", "games/ie1_eur.nds",
+             "--salida", os.path.join(RAIZ, "idiomas"))
+    ejecutar("analizar_cadenas.py", rom, idioma)
+    # textos del codigo que analizar_cadenas no empareja (por ejemplo "Gym" del mapa)
+    ejecutar("ampliar_cadenas.py", rom, idioma, obligatorio=False)
+    ejecutar("crear_parche_textos.py", idioma)
+    origen = os.path.join(TRABAJO, "idiomas", idioma, "arm9_textos.bin")
+    destino = os.path.join(RAIZ, "idiomas", idioma, "arm9_textos.bin")
+    if os.path.exists(origen):
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        shutil.move(origen, destino)
 
 
 def main():
@@ -109,71 +143,56 @@ def main():
     if not os.path.exists(os.path.join(TRABAJO, "images", "arm9.bin")):
         ejecutar("extraer_rom.py", "games/ie1_eur.nds", "images")
 
-    if "ie1_es" in roms:
-        print("\n=== Idioma espanol / Spanish language ===")
-        ejecutar("crear_paquete_idioma.py", roms["ie1_es"], "es", "--base", "games/ie1_eur.nds",
-                 "--salida", os.path.join(RAIZ, "idiomas"))
-        ejecutar("analizar_cadenas.py", roms["ie1_es"])
-        ejecutar("crear_parche_textos.py", "es")
-        origen = os.path.join(TRABAJO, "idiomas", "es", "arm9_textos.bin")
-        destino = os.path.join(RAIZ, "idiomas", "es", "arm9_textos.bin")
-        if os.path.exists(origen):
-            shutil.move(origen, destino)
+    idiomas_nuevos = [i for i in ("es", "fr", "de", "it") if "ie1_" + i in roms]
+    for idioma in idiomas_nuevos:
+        paquete_idioma(roms["ie1_" + idioma], idioma)
+    if idiomas_nuevos:
         cfg = os.path.join(RAIZ, "datos", "idiomas.cfg")
         if not os.path.exists(cfg):
-            open(cfg, "w").write("textos=es\nvoces=es\n")
-            print("   idioma del juego: espanol (se cambia en Opciones o en Esc)\n   game language: Spanish (change it in Options or Esc)")
+            # el primero que se anade pasa a ser el idioma del juego (espanol si viene)
+            i = idiomas_nuevos[0]
+            os.makedirs(os.path.dirname(cfg), exist_ok=True)
+            open(cfg, "w").write(f"textos={i}\nvoces={i}\n")
+            print(f"   idioma del juego: {NOMBRE_IDIOMA[i].split(' / ')[0]} (se cambia en Opciones o en Esc)\n"
+                  f"   game language: {NOMBRE_IDIOMA[i].split(' / ')[1]} (change it in Options or Esc)")
 
     if "ie1_jp" in roms:
         print("\n=== Mod: voces japonesas / Japanese voices ===")
-        ejecutar("crear_paquete_idioma.py", roms["ie1_jp"], "voces_jp", "--base", "games/ie1_eur.nds",
-                 "--solo-sonido", "--salida", os.path.join(RAIZ, "mods"))
-        # solo las voces de las cinematicas: archivos "capitulo_escena.SAD" (01_1.SAD, 02_18.SAD...)
-        import re
-        carpeta_voces = os.path.join(RAIZ, "mods", "voces_jp", "data_iz", "sound", "en")
-        quedan = 0
-        for raiz_d, _, nombres in os.walk(os.path.join(RAIZ, "mods", "voces_jp", "data_iz")):
-            for n in nombres:
-                ruta = os.path.join(raiz_d, n)
-                if os.path.dirname(ruta) == carpeta_voces and re.fullmatch(r"\d+_\d+\.SAD", n, re.I):
-                    quedan += 1
-                else:
-                    os.remove(ruta)
-        print(f"   {quedan} voces de cinematicas / cutscene voices")
-        import crear_npc_entrenador as C0
-        C0.escribir_mod_txt(os.path.join(RAIZ, "mods", "voces_jp"), {
-            "nombre": "Voces japonesas", "nombre_en": "Japanese voices",
-            "descripcion": "Las cinematicas suenan con las voces originales japonesas.",
-            "descripcion_en": "Cutscenes play with the original Japanese voices.",
-            "desbloqueo": "Siempre activo: se oye en la intro de anime y en las cinematicas.",
-            "desbloqueo_en": "Always on: you hear it in the anime intro and in the cutscenes.",
-        })
+        # voces de las cinematicas y opening japones (cancion y video)
+        import crear_mod_voces_jp
+        crear_mod_voces_jp.main([roms["ie1_jp"], "--base", base, "--mods", os.path.join(RAIZ, "mods")])
     # mods generados con las ROM del usuario
     import crear_npc_entrenador, crear_mod_niveles, crear_marca_prueba
     for m in (crear_npc_entrenador, crear_mod_niveles, crear_marca_prueba):
         m.IE1 = RAIZ
     es_pack = os.path.join(RAIZ, "idiomas", "es", "data_iz", "script", "en", "evet.pkb")
-    print("\n=== Mod: NPC entrenador / Trainer NPC ===")
+    print("\n=== Mod: Entrenamiento libre (NPC entrenador) / Free training (trainer NPC) ===")
     args = ["x", "--rom", base]
     if os.path.exists(es_pack): args += ["--es", es_pack]
     sys.argv = args
     crear_npc_entrenador.main()
-    activar = ["entrenamiento_libre", "npc_entrenador"] + (["voces_jp"] if "ie1_jp" in roms else [])
+    activar = ["entrenamiento_libre"] + (["voces_jp"] if "ie1_jp" in roms else [])
+    activar += MODS_INCLUIDOS
     if "ie2_en" not in roms and "ie2_es" not in roms and \
-            os.path.exists(os.path.join(RAIZ, "mods", "niveles_supertecnicas", "parches.txt")):
+            os.path.exists(os.path.join(RAIZ, "mods", "mecanicas_ie2", "parches.txt")):
         # el mod ya viene con lo del IE2: solo faltan los guiones, que salen de la ROM base
-        print("\n=== Mod: Niveles de supertecnicas / Move levels ===")
+        print("\n=== Mod: Mecanicas IE2 / IE2 mechanics ===")
         sys.argv = ["x", "--ie1", base, "--solo-guiones", "--idiomas", os.path.join(RAIZ, "idiomas")]
         crear_mod_niveles.main()
-        activar.append("niveles_supertecnicas")
+        activar.append("mecanicas_ie2")
     elif "ie2_en" in roms or "ie2_es" in roms:
-        print("\n=== Mod: Niveles de supertecnicas / Move levels ===")
+        print("\n=== Mod: Mecanicas IE2 / IE2 mechanics ===")
         ie2 = roms.get("ie2_en") or roms.get("ie2_es")
         args = ["x", "--ie1", base, "--ie2", ie2, "--idiomas", os.path.join(RAIZ, "idiomas")]
         if "ie2_es" in roms: args += ["--ie2-es", roms["ie2_es"]]
         sys.argv = args
         crear_mod_niveles.main()
-        activar.append("niveles_supertecnicas")
+        activar.append("mecanicas_ie2")
+    if os.path.isdir(os.path.join(RAIZ, "mods", "ojeo_instantaneo")):
+        # Ojeo instantaneo: sus guiones (Celia y Nelly) salen de la ROM base
+        print("\n=== Mod: Ojeo instantaneo / Instant scouting ===")
+        import crear_mod_ojeo
+        crear_mod_ojeo.main(base, os.path.join(RAIZ, "mods"))
     # activar los mods generados (respetando los que ya hubiera)
     cfg = os.path.join(RAIZ, "mods", "mods.cfg")
     activos = []

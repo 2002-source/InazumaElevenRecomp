@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Crea el mod 'niveles_supertecnicas': las supertecnicas suben de nivel con el
+Crea el mod de niveles (ahora dentro de 'mecanicas_ie2', ver crear_mod_mecanicas_ie2.py): las supertecnicas suben de nivel con el
 uso, como en el Inazuma Eleven 2. El motor del IE1 ya tiene el sistema (contador
 de usos y calculo del grado); lo tiene apagado porque en sus datos todas las
 tecnicas tienen la categoria 0. El mod copia del IE2:
@@ -81,16 +81,18 @@ def main():
     ap.add_argument("--solo-guiones", action="store_true",
                     help="sin ROM del IE2: rehace solo los guiones con las marcas que ya trae el mod")
     ap.add_argument("--dy", type=int, default=-8, help="ajuste vertical de la marca del cartel")
-    ap.add_argument("--hueco", type=int, default=2, help="pixeles entre el nombre y la marca del cartel")
+    ap.add_argument("--hueco", type=int, default=3, help="pixeles libres a la derecha del nombre (como el marco del IE2)")
     ap.add_argument("--ie2-es", default=None,
                     help="ROM espanola de Tormenta de Fuego (para el cartel 'Nv +' en espanol)")
+    for l, n in (("fr", "francesa"), ("de", "alemana"), ("it", "italiana")):
+        ap.add_argument(f"--ie2-{l}", default=None, help=f"ROM {n} del IE2 (cartel 'Nv +' y marcas en ese idioma)")
     a = ap.parse_args()
-    r1 = open(a.ie1, "rb").read()
+    r1 = leer_rom(a.ie1)
     if a.solo_guiones:
-        dest = f"{IE1}/mods/niveles_supertecnicas"
+        dest = f"{IE1}/mods/mecanicas_ie2"   # (antes niveles_supertecnicas: ahora va dentro de Mecanicas IE2)
         guiones_desde_mod(a, r1, dest)
         return
-    r2 = open(a.ie2, "rb").read()
+    r2 = leer_rom(a.ie2)
     def de_ie2(ruta):          # ROM del IE2 inglesa (en) o espanola (sp)
         try:
             return archivo_rom(r2, ruta)
@@ -135,7 +137,7 @@ def main():
                 umbrales += 1
     else:
         print("AVISO: lvup_command.dat no tiene la misma estructura en los dos juegos; no se copian los umbrales")
-    dest = f"{IE1}/mods/niveles_supertecnicas"
+    dest = f"{IE1}/mods/mecanicas_ie2"   # (antes niveles_supertecnicas: ahora va dentro de Mecanicas IE2)
     os.makedirs(dest, exist_ok=True)
 
     # Cartel "Nv +": el IE1 dibuja los bocadillos de los jugadores con
@@ -145,7 +147,7 @@ def main():
     # del IE2 del mismo idioma, solo con ese idioma de textos.
     def bocadillos(rom, nombre_idioma):
         import zlib
-        for carpeta in ("en", "sp", "es"):
+        for carpeta in CARPETAS_IE2:   # en, sp (espanol), fr, ge (aleman), it
             try:
                 return archivo_rom(rom, f"/data_iz/pic3d/{carpeta}/ply_bkr01.pac_")
             except SystemExit:
@@ -174,10 +176,10 @@ def main():
             return 0
     import shutil
     shutil.rmtree(os.path.join(dest, "idioma"), ignore_errors=True)
-    for lang, ruta_rom in (("en", a.ie2), ("es", a.ie2_es)):
+    for lang, ruta_rom in roms_ie2(a).items():
         if not ruta_rom:
             continue
-        pac = bocadillos(r2 if ruta_rom == a.ie2 else open(ruta_rom, "rb").read(), lang)
+        pac = bocadillos(r2 if ruta_rom == a.ie2 else leer_rom(ruta_rom), lang)
         if pac is None:
             continue
         n = animaciones(pac)
@@ -190,10 +192,24 @@ def main():
         print(f"Cartel 'Nv +' ({lang}): bocadillos del IE2 con {n} animaciones")
     if not a.ie2_es:
         print("(Para el cartel en espanol: --ie2-es \"RUTA/Tormenta de Fuego espanola.nds\")")
+    crear_iconos_grado(a, dest)
+    crear_graficos_exp(a, dest)
     crear_marcas_cartel(a, r1, dest)
     open(os.path.join(dest, "parches.txt"), "w", encoding="utf-8").write("\n".join(lineas) + "\n")
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import crear_npc_entrenador as C3
+    # Mecanicas IE2: niveles + tiro y bloqueos (tiro.cfg) + talentos (talentos.cfg) + Mark libre (capitan.cfg) + EXP x2 (exp_x2.cfg), con su ficha
+    import crear_mod_mecanicas_ie2 as MEC
+    for cfg, txt in (("tiro.cfg", "# boton de tiro, tiro largo, area azul, marcas y bloqueos (como el IE2)\n"),
+                     ("talentos.cfg", "# talentos en los partidos (como el IE2)\n"),
+                     ("capitan.cfg", MEC.CAPITAN_CFG),
+                     ("exp_x2.cfg", MEC.EXP_X2_CFG)):
+        if not os.path.exists(os.path.join(dest, cfg)):
+            open(os.path.join(dest, cfg), "w", encoding="utf-8").write(txt)
+    open(os.path.join(dest, "mod.txt"), "w", encoding="utf-8").write("".join(f"{k}={v}\n" for k, v in MEC.FICHA.items()))
+    print(f"{cambios} tecnicas con categoria del IE2 ({distinto_indice} en otra posicion), {umbrales} bytes de umbrales")
+    print("Mod creado en", dest, "(Mecanicas IE2) - activalo en el lanzador (Mods) o en Esc > Mods")
+    return
     C3.escribir_mod_txt(dest, {
         "nombre": "Niveles de supertecnicas", "nombre_en": "Move levels",
         "descripcion": "Las supertecnicas suben de nivel con el uso, como en el Inazuma Eleven 2: ganan poder, "
@@ -217,8 +233,232 @@ def main():
 #    21 el codigo inyectado por el complemento (segun el grado del jugador), y lo
 #    mueven y retiran junto con el nombre.
 VAR_TECNICA, VAR_MARCA = 20, 21
+IDIOMAS = ("en", "es", "fr", "de", "it")
+
+
+_ROMS = {}
+
+
+def leer_rom(ruta):
+    """Lee una ROM .nds; tambien dentro de un .zip (la primera .nds que haya)."""
+    if ruta not in _ROMS:
+        if ruta.lower().endswith(".zip"):
+            import zipfile
+            with zipfile.ZipFile(ruta) as z:
+                nds = [n for n in z.namelist() if n.lower().endswith(".nds")]
+                if not nds:
+                    raise SystemExit(f"No hay ninguna ROM .nds dentro de {ruta}")
+                _ROMS[ruta] = z.read(nds[0])
+        else:
+            _ROMS[ruta] = open(ruta, "rb").read()
+    return _ROMS[ruta]
+
+
+def roms_ie2(a):
+    """ROM del IE2 de cada idioma (las que se hayan dado)."""
+    return {"en": a.ie2, "es": a.ie2_es, "fr": a.ie2_fr, "de": a.ie2_de, "it": a.ie2_it}
+
+
+def con_paquete(a, lang):
+    """Hay paquete de idioma (idiomas/<lang>) con los nombres dibujados de las tecnicas."""
+    return lang == "en" or os.path.isdir(os.path.join(a.idiomas, lang, "data_iz", "pic3d", "script", "en"))
 HUECOS = ["tt70", "tt71", "tt72", "tt73", "tt74", "tt75", "tt76", "tt77", "tt78"]
 HUECO_VACIO = "tt85"   # tt79 no existe en la ROM: se usa otro grafico sin uso
+
+
+# Iconos de grado de los menus (ficha del jugador y barra encima del boton de tecnica
+# antes de tirar). El IE1 los lee de pic2d/menu/<idioma>/msup_z06/z07/z08.pac_ y solo
+# trae los ingleses en todos los idiomas ("L" + numero, "+1", "+2"). El IE2 los lleva
+# dentro de pic2d/menu/<idioma>/SMStat.SPF_ (piezas MSUP_Z06/Z07/Z08), cada idioma con
+# los suyos: espanol "G", "+", "++"; frances "N", "2", "3"; italiano "E1", "E2"...
+# Mismo formato de pieza (paleta, mapa de 8 entradas, tiles): se copian tal cual.
+CARPETAS_IE2 = ("en", "sp", "es", "fr", "ge", "de", "it")
+CARPETA_IE2 = {"en": "en", "es": "sp", "fr": "fr", "de": "ge", "it": "it"}   # carpeta de cada idioma en el IE2
+
+
+def piezas_spf(spf):
+    """Piezas de un paquete SPF de Level-5: {nombre sin extension: datos}."""
+    d = lz10_des(spf) if spf[:1] == b"\x10" else spf
+    if d[:3] != b"SFP":
+        return {}
+    u32 = lambda o: struct.unpack_from("<I", d, o)[0]
+    base, out, e = u32(0x10), {}, 0x20
+    while e + 16 <= len(d):
+        nom, tam, des = u32(e), u32(e + 4), u32(e + 8)
+        if not nom or nom >= len(d):
+            break
+        n = d[nom:d.index(0, nom)].decode("latin-1")
+        if ".PAC" not in n.upper():
+            break
+        out[n.split(".")[0].upper()] = d[base + des * 32:base + des * 32 + tam]
+        e += 16
+    return out
+
+
+def reemplazar_pieza(spl, spd, nombre, datos):
+    """Paquete .SPL/.SPD de pic3d: cambia la pieza 'nombre' por 'datos' (tal cual, ya
+    comprimida o no). Entradas de 16 bytes desde 0x20 en el SPL: [nombre, tamano,
+    desplazamiento / 32, ...]. Si no cabe en su hueco, va al final del SPD."""
+    spl, spd = bytearray(spl), bytearray(spd)
+    e = 0x20
+    while e + 16 <= len(spl):
+        nom, tam, des = struct.unpack_from("<III", spl, e)
+        if not nom or nom >= len(spl):
+            break
+        n = spl[nom:spl.index(0, nom)].decode("latin-1")
+        if n.upper() == nombre.upper():
+            hueco = (tam + 31) // 32 * 32
+            if len(datos) <= hueco:
+                spd[des * 32:des * 32 + len(datos)] = datos
+            else:
+                while len(spd) % 32:
+                    spd.append(0)
+                des = len(spd) // 32
+                spd += datos
+            struct.pack_into("<II", spl, e + 4, len(datos), des)
+            return bytes(spl), bytes(spd)
+        e += 16
+    return None
+
+
+def crear_iconos_grado(a, dest):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import crear_npc_entrenador as C
+    for lang, ruta in roms_ie2(a).items():
+        if not ruta:
+            continue
+        rom2 = leer_rom(ruta)
+        spf = None
+        for carpeta in CARPETAS_IE2:
+            try:
+                spf = archivo_rom(rom2, f"/data_iz/pic2d/menu/{carpeta}/SMStat.SPF_"); break
+            except SystemExit:
+                pass
+        P = piezas_spf(spf) if spf else {}
+        if not all(f"MSUP_Z0{n}" in P for n in (6, 7, 8)):
+            print(f"AVISO: no encontre los iconos de grado (MSUP_Z06..Z08) en el IE2 ({lang})")
+            continue
+        p = os.path.join(dest, "idioma", lang, "data_iz", "pic2d", "menu", "en")
+        os.makedirs(p, exist_ok=True)
+        for n in (6, 7, 8):
+            open(os.path.join(p, f"msup_z0{n}.pac_"), "wb").write(C.lz10_com(P[f"MSUP_Z0{n}"]))
+        print(f"Iconos de grado de los menus ({lang}): los del IE2")
+        # Selector de tecnicas del partido: la marca de la barra de encima de cada boton
+        # sale de pic2d/<idioma>/mbd_z01..z04.pac_ (el ov1 los carga como recursos 56-59 de
+        # la ventana; mbd_z02 = "+1"/"+2", mbd_z03 = "L"). El IE1 trae los ingleses en todos
+        # los idiomas; el IE2 los de cada idioma (espanol "+"/"++" y "G").
+        p2 = os.path.join(dest, "idioma", lang, "data_iz", "pic2d", "en")
+        hechos = 0
+        for n in ("mbd_z01.pac_", "mbd_z02.pac_", "mbd_z03.pac_", "mbd_z04.pac_"):
+            try:
+                datos = archivo_rom(rom2, f"/data_iz/pic2d/{CARPETA_IE2[lang]}/{n}")
+            except SystemExit:
+                continue
+            os.makedirs(p2, exist_ok=True)
+            open(os.path.join(p2, n), "wb").write(datos)
+            hechos += 1
+        print(f"Marcas del selector de tecnicas ({lang}): " + ("las del IE2" if hechos == 4 else "AVISO: no las encontre"))
+        # Pantalla de supertecnicas del equipo (Datos > Supertecnicas): las marcas van en la
+        # pieza HWD_I04 de pic3d/<idioma>/menu_special_comand.SPL/.SPD (16x16, dos dibujos).
+        # Se cambia solo esa pieza en el archivo del IE1 de ese idioma (paquete de idioma o,
+        # en ingles, la ROM), para no tocar lo demas de la pantalla.
+        try:
+            l2 = archivo_rom(rom2, f"/data_iz/pic3d/{CARPETA_IE2[lang]}/menu_special_comand.SPL")
+            d2 = archivo_rom(rom2, f"/data_iz/pic3d/{CARPETA_IE2[lang]}/menu_special_comand.SPD")
+        except SystemExit:
+            l2 = d2 = None
+        pieza = None
+        if l2:
+            e = 0x20
+            while e + 16 <= len(l2):
+                nom, tam, des = struct.unpack_from("<III", l2, e)
+                if not nom or nom >= len(l2): break
+                if l2[nom:l2.index(0, nom)].decode("latin-1").upper() == "HWD_I04.PAC_":
+                    pieza = d2[des * 32:des * 32 + tam]; break
+                e += 16
+        l1 = d1 = None
+        paquete = os.path.join(a.idiomas, lang, "data_iz", "pic3d", "en")
+        if lang != "en" and os.path.exists(os.path.join(paquete, "menu_special_comand.SPL")):
+            l1 = open(os.path.join(paquete, "menu_special_comand.SPL"), "rb").read()
+            d1 = open(os.path.join(paquete, "menu_special_comand.SPD"), "rb").read()
+        else:
+            try:
+                l1 = archivo_rom(leer_rom(a.ie1), "/data_iz/pic3d/en/menu_special_comand.SPL")
+                d1 = archivo_rom(leer_rom(a.ie1), "/data_iz/pic3d/en/menu_special_comand.SPD")
+            except SystemExit:
+                pass
+        nuevo = reemplazar_pieza(l1, d1, "HWD_I04.PAC_", pieza) if (pieza and l1 and d1) else None
+        if nuevo:
+            p3 = os.path.join(dest, "idioma", lang, "data_iz", "pic3d", "en")
+            os.makedirs(p3, exist_ok=True)
+            open(os.path.join(p3, "menu_special_comand.SPL"), "wb").write(nuevo[0])
+            open(os.path.join(p3, "menu_special_comand.SPD"), "wb").write(nuevo[1])
+            print(f"Marcas de la pantalla de supertecnicas ({lang}): las del IE2")
+        else:
+            print(f"AVISO: no pude cambiar las marcas de la pantalla de supertecnicas ({lang})")
+
+
+def piezas_spl(spl, spd):
+    """Piezas de un paquete .SPL/.SPD de pic3d: {nombre: datos} (entradas de 16 bytes
+    desde 0x20 en el SPL: [nombre, tamano, desplazamiento / 32, ...])."""
+    out, e = {}, 0x20
+    while e + 16 <= len(spl):
+        nom, tam, des = struct.unpack_from("<III", spl, e)
+        if not nom or nom >= len(spl):
+            break
+        out[spl[nom:spl.index(0, nom)].decode("latin-1").upper()] = spd[des * 32:des * 32 + tam]
+        e += 16
+    return out
+
+
+# Pantalla de EXP (pic3d/<idioma>/cl_bonus.SPL/.SPD): el IE2 tiene las mismas piezas que el
+# IE1 (barra de cada jugador con "Niv.", "NUEVA", "SIG.", "Sube niv.", numeros, barras) en
+# cada idioma, y una mas, BGDN_B06 = "x2!!" (EXP doble en los encuentros ganados por 5+ sin
+# encajar). Las comunes se cambian en el archivo del IE1 de cada idioma (mismo orden de
+# piezas: el juego las pide por numero); la del x2 se guarda aparte (exp_x2.pac) y la dibuja
+# el mod encima de cada fila, porque el IE1 no tiene sitio para ella en las filas.
+def crear_graficos_exp(a, dest):
+    x2 = None
+    for lang, ruta in roms_ie2(a).items():
+        if not ruta:
+            continue
+        rom2 = leer_rom(ruta)
+        try:
+            P2 = piezas_spl(archivo_rom(rom2, f"/data_iz/pic3d/{CARPETA_IE2[lang]}/cl_bonus.SPL"),
+                            archivo_rom(rom2, f"/data_iz/pic3d/{CARPETA_IE2[lang]}/cl_bonus.SPD"))
+        except SystemExit:
+            print(f"AVISO: no encontre la pantalla de EXP del IE2 ({lang})")
+            continue
+        if x2 is None and "BGDN_B06.PAC_" in P2:
+            x2 = P2["BGDN_B06.PAC_"]
+        paquete = os.path.join(a.idiomas, lang, "data_iz", "pic3d", "en")
+        if lang != "en" and os.path.exists(os.path.join(paquete, "cl_bonus.SPL")):
+            l1 = open(os.path.join(paquete, "cl_bonus.SPL"), "rb").read()
+            d1 = open(os.path.join(paquete, "cl_bonus.SPD"), "rb").read()
+        else:
+            try:
+                l1 = archivo_rom(leer_rom(a.ie1), "/data_iz/pic3d/en/cl_bonus.SPL")
+                d1 = archivo_rom(leer_rom(a.ie1), "/data_iz/pic3d/en/cl_bonus.SPD")
+            except SystemExit:
+                print(f"AVISO: no encontre la pantalla de EXP del IE1 ({lang})")
+                continue
+        cambiadas = 0
+        for nombre in piezas_spl(l1, d1):
+            if nombre in P2:
+                nuevo = reemplazar_pieza(l1, d1, nombre, P2[nombre])
+                if nuevo:
+                    l1, d1 = nuevo
+                    cambiadas += 1
+        p3 = os.path.join(dest, "idioma", lang, "data_iz", "pic3d", "en")
+        os.makedirs(p3, exist_ok=True)
+        open(os.path.join(p3, "cl_bonus.SPL"), "wb").write(l1)
+        open(os.path.join(p3, "cl_bonus.SPD"), "wb").write(d1)
+        print(f"Pantalla de EXP ({lang}): {cambiadas} graficos del IE2")
+    if x2:
+        open(os.path.join(dest, "exp_x2.pac"), "wb").write(x2)
+        print("Grafico x2!! de la EXP doble: el del IE2")
+    else:
+        print("AVISO: no encontre el grafico x2!! del IE2 (la EXP doble funciona igual, sin el grafico)")
 
 
 def crear_marcas_cartel(a, r1, dest):
@@ -227,16 +467,16 @@ def crear_marcas_cartel(a, r1, dest):
     import crear_npc_entrenador as C
     import crear_marca_prueba as MP
     C.archivo_rom = archivo_rom
-    roms = {"en": a.ie2, "es": a.ie2_es}
+    roms = roms_ie2(a)
     marcas_x0 = {}
     for lang, ruta in roms.items():
         if not ruta: continue
-        rom2 = open(ruta, "rb").read()
+        rom2 = leer_rom(ruta)
         p = os.path.join(dest, "idioma", lang, "data_iz", "pic3d", "script", "en")
         os.makedirs(p, exist_ok=True)
         primera = None
         for k, hueco in enumerate(HUECOS):
-            pac = MP.marca_ie2(rom2, "en", 50 + k)
+            pac = MP.marca_ie2(rom2, CARPETA_IE2[lang], 50 + k)
             if pac is None:
                 print(f"AVISO: falta la marca mbv_c0{50 + k} en el IE2 ({lang})"); continue
             open(os.path.join(p, hueco + ".pac_"), "wb").write(pac)
@@ -247,10 +487,21 @@ def crear_marcas_cartel(a, r1, dest):
         t0, tl = st.unpack_from("<II", d, 4)
         d[t0:t0 + tl] = bytes(tl)
         open(os.path.join(p, HUECO_VACIO + ".pac_"), "wb").write(C.lz10_com(bytes(d)))
-        marcas_x0[lang] = MP.visibles(MP.marca_ie2(rom2, "en", 50))[0]
+        marcas_x0[lang] = MP.visibles(MP.marca_ie2(rom2, CARPETA_IE2[lang], 50))[0]
         print(f"Marcas del cartel ({lang}): {HUECOS[0]}..{HUECOS[-1]} y {HUECO_VACIO} (vacia)")
     if not marcas_x0:
         return
+    # Idiomas con paquete pero sin ROM del IE2 en ese idioma: las marcas inglesas
+    # (el cartel "Nv +" no, porque sus bocadillos llevan textos de cada idioma)
+    if "en" in marcas_x0:
+        origen = os.path.join(dest, "idioma", "en", "data_iz", "pic3d", "script", "en")
+        for lang in IDIOMAS:
+            if lang in marcas_x0 or not con_paquete(a, lang):
+                continue
+            p = os.path.join(dest, "idioma", lang, "data_iz", "pic3d", "script", "en")
+            shutil.copytree(origen, p, dirs_exist_ok=True)
+            marcas_x0[lang] = marcas_x0["en"]
+            print(f"Marcas del cartel ({lang}): las inglesas (sin ROM del IE2 en ese idioma)")
     generar_guiones_marca(a, r1, dest, marcas_x0)
 
 
@@ -260,7 +511,7 @@ def guiones_desde_mod(a, r1, dest):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import crear_marca_prueba as MP
     marcas_x0 = {}
-    for lang in ("en", "es"):
+    for lang in IDIOMAS:
         ruta = os.path.join(dest, "idioma", lang, "data_iz", "pic3d", "script", "en", HUECOS[0] + ".pac_")
         if os.path.exists(ruta):
             marcas_x0[lang] = MP.visibles(open(ruta, "rb").read())[0]
@@ -279,8 +530,8 @@ def generar_guiones_marca(a, r1, dest, marcas_x0):
     shutil.rmtree(os.path.join(dest, "pk"), ignore_errors=True)
     # nombre dibujado de una tecnica en cada idioma
     def nombre_pac(lang, nombre):
-        if lang == "es":
-            ruta = os.path.join(a.idiomas, "es", "data_iz", "pic3d", "script", "en", nombre + ".pac_")
+        if lang != "en":
+            ruta = os.path.join(a.idiomas, lang, "data_iz", "pic3d", "script", "en", nombre + ".pac_")
             if os.path.exists(ruta): return open(ruta, "rb").read()
         try:
             return archivo_rom(r1, f"/data_iz/pic3d/script/en/{nombre}.pac_")
@@ -322,10 +573,10 @@ def generar_guiones_marca(a, r1, dest, marcas_x0):
             clave = (lang, nombre)
             if clave not in medidas:
                 pac = nombre_pac(lang, nombre)
-                medidas[clave] = MP.visibles(pac)[1] if pac else None
+                medidas[clave] = MP.visibles(pac) if pac else None
             if medidas[clave] is None: continue
-            dx = medidas[clave] + 1 + a.hueco - marcas_x0[lang]
-            nuevo = guion_con_marca(C, MP, d, ranura_nombre, libre, tecnica, dx, a.dy)
+            pos = posiciones_cartel(medidas[clave], a.hueco)
+            nuevo = guion_con_marca(C, MP, d, ranura_nombre, libre, tecnica, pos, a.dy)
             if nuevo is None: continue
             p = os.path.join(dest, "pk", "act", lang); os.makedirs(p, exist_ok=True)
             open(os.path.join(p, f"{gid}.lz"), "wb").write(C.lz10_com(nuevo))
@@ -334,8 +585,37 @@ def generar_guiones_marca(a, r1, dest, marcas_x0):
         print(f"Guiones de tecnica con marca de grado ({lang}): {n}")
 
 
-def guion_con_marca(C, MP, d, rn, rm, tecnica, dx, dy):
+# Colocacion del cartel como el IE2. En el IE2 el marco de cada nombre mide lo que el
+# texto (de 50 a 160 px, con 2-4 px libres a la derecha), el nombre se centra en la
+# pantalla (instruccion 0x3087 [0, 50, 0]: punto de anclaje en el centro) y, con marca,
+# el grupo nombre + marca (marco de 48 px pegado al del nombre) se centra entero: el
+# nombre se corre a la izquierda y la marca queda justo detras. Medido en el IE2
+# espanol (Baile de mariposas con "+"): nombre visible 27..181, marca 188..222.
+# En el IE1 los nombres van en un marco fijo de 160 px con el texto a la izquierda y
+# anclados a la izquierda (x = 48), asi que se calcula el marco "del IE2" con lo que
+# mide el texto. Sin marca el nombre se centra igual que en el IE2.
+X_DESCANSO = 48          # x de descanso del nombre en los guiones del IE1
+ANCHO_MARCA = 48         # marco de las marcas mbv_c050..058 del IE2
+VAR_X_CON, VAR_X_SIN = 22, 23   # x del nombre con marca / sin marca (el gancho elige)
+
+
+def posiciones_cartel(medida, hueco):
+    v0, v1, w, _ = medida
+    ancho = min(w, v1 + 1 + hueco)
+    con = round(128 - (ancho + ANCHO_MARCA) / 2)
+    sin = round(128 - ancho / 2)
+    return con, sin, con + ancho     # nombre con marca, nombre sin marca, marca
+
+
+def poner_tipo(x, k, t):
+    b = x.raw[8 + k // 2]
+    x.raw[8 + k // 2] = (b & 0x0F) | (t << 4) if k % 2 else (b & 0xF0) | t
+
+
+def guion_con_marca(C, MP, d, rn, rm, tecnica, pos, dy):
     """Anade la marca (ranura rm) junto al nombre (ranura rn) en un guion de tecnica."""
+    x_con, x_sin, x_marca = pos
+    dx = x_marca - x_con                  # la marca va siempre a esta distancia del nombre
     code, T = MP.textos_act(d)
     cab, ins = C.ssd_leer(code)
     def N(op, tipos, args): return C.nueva(ins, op, tipos, args)
@@ -353,19 +633,28 @@ def guion_con_marca(C, MP, d, rn, rm, tecnica, dx, dy):
         if x.op == 0x300B:
             xv = struct.unpack("<i", struct.pack("<I", x.arg(1)))[0]
             destino = xv + dx
-            if xv < 0:                     # el nombre sale por la izquierda: la marca tambien, entera
+            if xv == X_DESCANSO:           # descanso: nombre en la x que elija el gancho, marca detras
+                destino = x_marca
+                poner_tipo(x, 1, 5); x.set(1, VAR_X_CON)
+            elif xv < 0:                   # el nombre sale por la izquierda: la marca tambien, entera
                 destino = min(destino, -64)
             y.set(1, destino & 0xFFFFFFFF); y.set(2, x.arg(2) + dy)
         insertar(x.idx, [y])
-    # tras 0x3079 (o 0x3078): cargar el grafico de la variable 21, colocarlo y mostrarlo
-    fin = next((x for x in ins if x.op == 0x3079), None) or next(x for x in ins if x.op == 0x3078)
-    insertar(fin.idx, [N(0x3008, [1, 5], [rm, VAR_MARCA]),
-                       N(0x300A, [1, 1, 1], [rm, x0 + dx, y0 + dy]),
-                       N(0x300E, [1, 1], [rm, 1])])
-    # antes de 0x3078: la tecnica en la variable 20
-    c = next(x for x in ins if x.op == 0x3078)
-    antes = next(x.idx for x in ins if x.idx == c.idx - 1)
-    insertar(antes, [N(0x7001, [6, 1], [VAR_TECNICA, tecnica])])
+    # en cada cartel (algunos guiones tienen dos caminos, cada uno con su 0x3078: la Mano
+    # Celestial, 0x19258): antes de 0x3078 la tecnica en la variable 20; tras su 0x3079 (o
+    # el propio 0x3078) cargar el grafico de la variable 21, colocarlo y mostrarlo
+    for c in [x for x in ins if x.op == 0x3078]:
+        sig = next((x for x in ins if x.idx > c.idx and x.op in (0x3078, 0x3079)), None)
+        fin = sig if sig is not None and sig.op == 0x3079 else c
+        pos = [x for x in ins if x.op == 0x300A and x.argc >= 3 and x.tipo(0) == 1 and x.arg(0) == rn and x.idx < c.idx]
+        p = pos[-1] if pos else pos0
+        xc = struct.unpack("<i", struct.pack("<I", p.arg(1)))[0]; yc = p.arg(2)
+        insertar(fin.idx, [N(0x3008, [1, 5], [rm, VAR_MARCA]),
+                           N(0x300A, [1, 1, 1], [rm, xc + dx, yc + dy]),
+                           N(0x300E, [1, 1], [rm, 1])])
+        insertar(c.idx - 1, [N(0x7001, [6, 1], [VAR_TECNICA, tecnica]),
+                             N(0x7001, [6, 1], [VAR_X_CON, x_con]),
+                             N(0x7001, [6, 1], [VAR_X_SIN, x_sin])])
     return MP.escribir_act(cab, ins, T)
 
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Crea el mod 'npc_entrenador': un NPC nuevo junto a la Torre (mapa mr02b13) que
-ofrece el entrenamiento. NO toca la ROM: lee tus archivos y genera otros nuevos
-dentro de mods/npc_entrenador/.
+Anade al mod 'entrenamiento_libre' el NPC entrenador: un NPC nuevo en lo alto de la
+Torre (mapa mr02b13) que abre el menu de entrenamiento. NO toca la ROM: lee tus
+archivos y genera otros nuevos dentro de mods/entrenamiento_libre/ (el NPC y el menu
+son ahora un solo mod). Si existe el mod antiguo mods/npc_entrenador/ se borra (solo
+tenia archivos generados por este script) y en mods.cfg se cambia por
+entrenamiento_libre.
 
   python scripts/crear_npc_entrenador.py            (usa games/ie1_eur.nds e idiomas/es)
   python scripts/crear_npc_entrenador.py --dx 2 --dz 0 --angulo 90
@@ -37,11 +40,25 @@ TEXTOS = {
     "es": ["Soy un maestro en el entrenamiento.\\n\u00bfQuieres probarlo?",
            "\u00a1Pues empecemos!",
            "Vuelve cuando quieras entrenar."],
+    "fr": ["Je suis un ma\u00eetre de l'entra\u00eenement.\\nTu veux essayer ?",
+           "C'est parti !",
+           "Reviens quand tu veux\\nt'entra\u00eener."],
+    "de": ["Ich bin ein Meister im Training.\\nWillst du es versuchen?",
+           "Dann legen wir los!",
+           "Komm wieder, wann immer du\\ntrainieren willst."],
+    "it": ["Sono un maestro dell'allenamento.\\nVuoi provare?",
+           "Allora cominciamo!",
+           "Torna quando vuoi allenarti."],
 }
-# Letras con tilde -> tabla propia del juego (fuentes, codigos 0xA1-0xDF)
-TABLA = {"\u00e1": 0xB2, "\u00e9": 0xBA, "\u00ed": 0xBE, "\u00f3": 0xC4, "\u00fa": 0xCA, "\u00f1": 0xC2,
-         "\u00d1": 0xA9, "\u00fc": 0xCC, "\u00c1": 0xD1, "\u00c9": 0xD9, "\u00cd": 0xA6, "\u00d3": 0xAB,
-         "\u00da": 0xA2, "\u00bf": 0xA5, "\u00a1": 0xDF}
+# Letras con tilde -> tabla propia del juego (fuente FONT12T, codigos 0xA1-0xDF; la misma
+# en las versiones espanola, francesa, alemana e italiana)
+TABLA = {ch: 0xA1 + i for i, ch in enumerate(
+    "\u00d9\u00da\u00db\u00dc\u00bf\u00cd\u00cf\u00d0\u00d1\u00d2\u00d3\u00d4\u00d5\u00d6\u00d8"   # A1-AF
+    "\0"                                                                              # B0 (no se usa)
+    "\u00e0\u00e1\u00e2\u00e3\u00e4\u0153\u00e6\u00e7\u00e8\u00e9\u00ea\u00eb\u00ec\u00ed\u00ee"   # B1-BF
+    "\u00ef\u00f0\u00f1\u00f2\u00f3\u00f4\u00f5\u00f6\u201e\u00f9\u00fa\u00fb\u00fc\u00fd\u20ac\u00ff"   # C0-CF
+    "\u00c0\u00c1\u00c2\u00c3\u00c4\u0152\u00c6\u00c7\u00c8\u00c9\u00ca\u00cb\u00cc\u00ce\u0178\u00a1")  # D0-DF
+    if ch != "\0"}
 
 def a_juego(t):
     out = bytearray()
@@ -241,13 +258,16 @@ def main():
     ap.add_argument("--rom", default=f"{IE1}/games/ie1_eur.nds")
     ap.add_argument("--es", default=f"{IE1}/idiomas/es/data_iz/script/en/evet.pkb",
                     help="evet.pkb en espanol (del paquete de idioma)")
+    ap.add_argument("--idiomas", default=f"{IE1}/idiomas",
+                    help="paquetes de idioma: se anade el dialogo en todos los que haya (es, fr, de, it)")
     ap.add_argument("--mapa", choices=list(MAPAS), default="plataforma",
                     help="mapa donde va el NPC: 'plataforma' (arriba de la torre, mr02b13) o 'torre' (mr02b02)")
     ap.add_argument("--dx", type=float, default=0.0, help="desplazamiento en X respecto a la referencia del mapa (unidades)")
     ap.add_argument("--dz", type=float, default=0.0, help="desplazamiento en Z respecto al Old man")
-    ap.add_argument("--x", type=float, default=None, help="posicion X absoluta (en lugar de --dx)")
-    ap.add_argument("--z", type=float, default=None, help="posicion Z absoluta (en lugar de --dz)")
-    ap.add_argument("--y", type=float, default=None, help="altura (por defecto, la del Old man)")
+    # posicion definitiva en la plataforma de la Torre: donde aparece Mark al entrar
+    ap.add_argument("--x", type=float, default=1.66, help="posicion X absoluta (en lugar de --dx)")
+    ap.add_argument("--z", type=float, default=0.72, help="posicion Z absoluta (en lugar de --dz)")
+    ap.add_argument("--y", type=float, default=7.98, help="altura")
     ap.add_argument("--desde", type=int, default=10150,
                     help="progreso minimo de la historia (variable 0x10004) para que aparezca; 0 = siempre")
     ap.add_argument("--angulo", type=int, default=90, help="orientacion en grados (90 = como el Old man)")
@@ -258,10 +278,17 @@ def main():
     rom = open(a.rom, "rb").read()
     eve_h, eve_b = archivo_rom(rom, "/data_iz/script/eve.pkh"), archivo_rom(rom, "/data_iz/script/eve.pkb")
     evet = {"en": (archivo_rom(rom, "/data_iz/script/en/evet.pkh"), archivo_rom(rom, "/data_iz/script/en/evet.pkb"))}
-    if os.path.exists(a.es) and os.path.exists(a.es[:-4] + ".pkh"):
-        evet["es"] = (open(a.es[:-4] + ".pkh", "rb").read(), open(a.es, "rb").read())
-    else:
-        print("Aviso: no encontre evet.pkb/evet.pkh en espanol (" + a.es + "); solo se generara el ingles.")
+    for lang in TEXTOS:
+        if lang == "en":
+            continue
+        b = a.es if lang == "es" else os.path.join(a.idiomas, lang, "data_iz", "script", "en", "evet.pkb")
+        if lang == "es" and not os.path.exists(b):
+            b = os.path.join(a.idiomas, "es", "data_iz", "script", "en", "evet.pkb")
+        if os.path.exists(b) and os.path.exists(b[:-4] + ".pkh"):
+            evet[lang] = (open(b[:-4] + ".pkh", "rb").read(), open(b, "rb").read())
+            print(f"Dialogo tambien en '{lang}' ({b})")
+        elif lang == "es":
+            print("Aviso: no encontre evet.pkb/evet.pkh en espanol (" + b + ").")
     E = pk_leer(eve_h, eve_b)
     for i, d in E[:40]:                          # ejemplos de instrucciones de otros guiones
         try:
@@ -295,15 +322,21 @@ def main():
     fin_main = max(x.idx for x in ins if x.op == 0x6002 and x.arg(0) == 0)   # cierre del bloque principal
     b0 = fin_main
     bloque = []
+    # Despues de los creditos el juego (guion 92104200) vuelve a poner el progreso en
+    # 10135 y pone a 1 la variable 0x10033 (partida terminada). Por eso la condicion es
+    #   progreso >= DESDE  o  0x10033 == 1
+    # 0x700E es el "o" de los guiones del juego (0x700F es el "y").
     cond = nueva(ins, 0x6008, [4], [b0 + 1]); bloque.append(cond)
+    bloque.append(nueva(ins, 0x700E, [4, 4], [b0 + 2, b0 + 3]))
     bloque.append(nueva(ins, 0x7006, [1, 5], [a.desde, 0x10004]))          # DESDE <= progreso
-    abre = nueva(ins, 0x6001, [1, 1], [1, b0 + 6]); bloque.append(abre)
+    bloque.append(nueva(ins, 0x7003, [5, 1], [0x10033, 1]))                # partida terminada
+    abre = nueva(ins, 0x6001, [1, 1], [1, b0 + 8]); bloque.append(abre)
     bloque += [crear, pos, ori]
-    bloque.append(nueva(ins, 0x6002, [1, 1], [1, b0 + 2]))
+    bloque.append(nueva(ins, 0x6002, [1, 1], [1, b0 + 4]))
     ssd_insertar(ins, fin_main - 1, bloque)
     guiones[GUION_COLOCACION] = ssd_escribir(cab, ins, 0, struct.unpack_from("<H", cab, 0x0E)[0])
     print(f"Colocacion: unidad {UNIDAD_NUEVA} en x={nx / 4096:.2f} y={ny / 4096:.2f} z={nz / 4096:.2f}, "
-          f"{a.angulo} grados, con progreso de la historia >= {a.desde} "
+          f"{a.angulo} grados, con progreso de la historia >= {a.desde} o la partida terminada "
           f"(referencia del mapa '{a.mapa}': x={x0 / 4096:.2f} z={z0 / 4096:.2f})")
 
     # --- 2) Dialogo: caso nuevo en el guion de conversaciones ---------------
@@ -399,35 +432,77 @@ def main():
     #   pk/eve/<id>.lz            guion (comprimido LZ10, como en el paquete)
     #   pk/evet/<idioma>/<id>.lz  textos de ese guion en ese idioma
     #   El complemento de mods las combina con los paquetes originales al arrancar.
-    dest = f"{IE1}/mods/npc_entrenador"
+    dest = f"{IE1}/mods/entrenamiento_libre"       # NPC y menu: un solo mod
+    if not os.path.isfile(os.path.join(dest, "fondo_entrenamiento.argb")):
+        print("Aviso: falta el fondo del menu (mods/entrenamiento_libre/fondo_entrenamiento.argb);"
+              " ejecuta tambien preparar_entrenamiento.py o el NPC no podra abrir el menu.")
     import shutil
     for viejo in ("data_iz", "idioma", "pk"):                 # restos de versiones anteriores
         shutil.rmtree(os.path.join(dest, viejo), ignore_errors=True)
     def guardar(rel, datos):
         p = os.path.join(dest, rel); os.makedirs(os.path.dirname(p), exist_ok=True)
         open(p, "wb").write(datos)
+    # Variantes del mismo mapa: el repartidor 88000001 / 89000001 elige el guion por
+    # la entrada del mapa, y la plataforma de la Torre (mr02b13) tiene dos entradas,
+    # 49 -> 80000450 / 81000450 y 50 -> 80000451 / 81000451 (como la Torre, 350 y 351).
+    # Despues de la historia el juego puede usar la segunda: el NPC va en las dos.
+    # Solo se copia si la variante original es identica a la base (las dos vacias).
+    originales = {i: d for i, d in E}
+    variantes = {}
+    for i in list(guiones):
+        v = i + 1
+        if v in originales and lz10_des(originales[v]) == lz10_des(originales[i]):
+            variantes[i] = v
     for i, d in guiones.items():
         guardar(f"pk/eve/{i}.lz", lz10_com(d))
+        if i in variantes:
+            guardar(f"pk/eve/{variantes[i]}.lz", lz10_com(d))
     for lang, (T, _) in textos_por_idioma.items():
-        guardar(f"pk/evet/{lang}/{GUION_DIALOGOS}.lz", next(d for i, d in T if i == GUION_DIALOGOS))
-    escribir_mod_txt(dest, {
-        "nombre": "NPC entrenador", "nombre_en": "Trainer NPC",
-        "descripcion": "Un entrenador en la plataforma de arriba de la Torre que te ofrece el menu de entrenamiento libre.",
-        "descripcion_en": "A trainer on the top platform of the Tower who offers you the free training menu.",
-        "desbloqueo": "Termina la historia (gana el Futbol Frontier) y sube a la plataforma de la Torre.",
-        "desbloqueo_en": "Finish the story (win the Football Frontier) and go up to the Tower platform.",
-    })
-    # el menu de entrenamiento (tu diseno) se abre con este NPC: su informacion tambien
-    entr = os.path.join(os.path.dirname(dest), "entrenamiento_libre")
-    if os.path.isdir(entr):
-        escribir_mod_txt(entr, {
-            "nombre": "Entrenamiento libre", "nombre_en": "Free training",
-            "descripcion": "Menu para entrenar a tus jugadores: sube su nivel, PE, PT y estadisticas a cambio de Pasion.",
-            "descripcion_en": "Menu to train your players: raise their level, GP, TP and stats in exchange for Passion.",
-            "desbloqueo": "Se abre hablando con el NPC entrenador de la Torre (activa tambien ese mod).",
-            "desbloqueo_en": "Opened by talking to the trainer NPC at the Tower (turn that mod on too).",
-        })
+        datos_txt = next(d for i, d in T if i == GUION_DIALOGOS)
+        guardar(f"pk/evet/{lang}/{GUION_DIALOGOS}.lz", datos_txt)
+        v = variantes.get(GUION_DIALOGOS)
+        if v and any(i == v for i, _ in T):
+            guardar(f"pk/evet/{lang}/{v}.lz", datos_txt)
+    if variantes:
+        print("Tambien en las variantes del mapa:", ", ".join(f"{i} -> {v}" for i, v in variantes.items()))
+    else:
+        print("Aviso: el mapa no tiene variantes iguales; el NPC solo va en", ", ".join(map(str, guiones)))
+    escribir_mod_txt(dest, MOD_TXT)
+    # el mod antiguo 'npc_entrenador' (solo el NPC) queda dentro de este
+    viejo = os.path.join(os.path.dirname(dest), "npc_entrenador")
+    if os.path.isdir(viejo):
+        shutil.rmtree(viejo, ignore_errors=True)
+        print("Borrado el mod antiguo", viejo, "(ahora va dentro de entrenamiento_libre)")
+    cfg = os.path.join(os.path.dirname(dest), "mods.cfg")
+    if os.path.isfile(cfg):
+        lineas = open(cfg, encoding="utf-8", errors="replace").read().splitlines()
+        activos = [l.strip() for l in lineas if l.strip() and not l.startswith("#")]
+        if "npc_entrenador" in activos:
+            nuevas = []
+            for l in lineas:
+                if l.strip() == "npc_entrenador":
+                    if "entrenamiento_libre" not in activos:
+                        nuevas.append("entrenamiento_libre")
+                    continue
+                nuevas.append(l)
+            open(cfg, "w", encoding="utf-8").write("\n".join(nuevas) + "\n")
+            print("mods.cfg: npc_entrenador cambiado por entrenamiento_libre")
     print("Mod creado en", dest, "- activalo en Esc > Mods")
+
+MOD_TXT = {
+    "nombre": "Entrenamiento libre", "nombre_en": "Free training",
+    "descripcion": "Un entrenador en lo alto de la Torre abre un menu para entrenar a tus jugadores: "
+                   "PE, PT y estadisticas a cambio de Pasion (450 por punto). Con X, el jugador vuelve "
+                   "gratis al nivel 1: conserva sus supertecnicas y pierde lo entrenado (con el mod de "
+                   "niveles, sus tecnicas vuelven a 0 usos).",
+    "descripcion_en": "A trainer on top of the Tower opens a menu to train your players: GP, TP and stats "
+                      "in exchange for Passion (450 per point). With X, the player goes back to level 1 "
+                      "for free: keeps the moves learned and loses all training (with the move levels "
+                      "mod, the moves go back to 0 uses).",
+    "desbloqueo": "Termina la historia (gana el Futbol Frontier) y sube a lo alto de la Torre "
+                  "(el mapa de arriba, no el de 'Torre - Plataforma').",
+    "desbloqueo_en": "Finish the story (win the Football Frontier) and go up to the Tower platform.",
+}
 
 def escribir_mod_txt(carpeta, campos):
     """Escribe o actualiza mod.txt (clave=valor), conservando las claves que ya tenga."""

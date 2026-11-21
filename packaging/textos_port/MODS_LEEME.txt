@@ -1,0 +1,92 @@
+MODS - INAZUMA ELEVEN RECOMP  v1.1
+==================================
+(English: README.txt - Français : LISEZMOI.txt - Deutsch: LIESMICH.txt -
+Italiano: LEGGIMI.txt)
+
+Activa o desactiva los mods en el lanzador (Mods) o en el menú Esc del juego
+(Mods). Los cambios se aplican al empezar a jugar o tras Esc > Sistema >
+Reiniciar. En el lanzador, pulsa Tab o haz clic derecho sobre un mod para ver
+qué hace. mods.cfg tiene la lista de mods activos, uno por línea. El
+preparador activa todos los mods incluidos menos "Pasión y Amistad al máximo".
+
+
+ENTRENAMIENTO LIBRE  (carpeta: entrenamiento_libre)
+  Un entrenador en lo alto de la Torre abre un menú para entrenar a tus
+  jugadores: PE, PT y estadísticas a cambio de Pasión (450 por punto).
+  Y: sube de nivel al jugador pagando Pasión (225 por cada punto de
+     estadística que gana, como mínimo 100 por nivel); las estadísticas, PE,
+     PT y técnicas son las que da el juego.
+  X: el jugador vuelve gratis al nivel 1: conserva sus supertécnicas y pierde
+     lo entrenado (con Mecánicas IE2, sus técnicas vuelven a 0 usos).
+  Cómo se consigue: termina la historia (gana el Fútbol Frontier) y sube a lo
+  alto de la Torre.
+  Se crea con: tu ROM inglesa.
+
+MECÁNICAS IE2  (carpeta: mecanicas_ie2)
+  Mecánicas del Inazuma Eleven 2, con el propio código del juego (lo tenía sin
+  activar):
+  - Niveles de supertécnicas: suben de nivel con el uso (aviso "Nv +" y la
+    marca de nivel junto al nombre, en los menús y al usarlas).
+  - Tiro: botón de tiro en la pantalla táctil (se puede arrastrar), tiros
+    largos desde fuera del área (marca T junto al nombre) y el área de tiro
+    azul.
+  - Bloqueos de tiro con técnicas de defensa o de tiro (marca B).
+  - Talentos (Ahorro, Ultratécnica...) con su efecto en el partido.
+  - Al terminar la historia, Mark deja de ser fijo: se puede quitar del equipo
+    y del primer puesto.
+  - En los encuentros, si ganas por 5 o más goles sin encajar, la experiencia
+    se dobla ("x2!!" en cada jugador y el total en magenta).
+  La partida guardada no cambia, salvo los usos de cada técnica (el juego ya
+  los guardaba).
+  Cómo se consigue: siempre activo.
+  Se crea con: tu ROM inglesa (más los datos del IE2 que ya trae).
+
+VALOR EN LAS SUPERTÉCNICAS  (carpeta: valor_escenas)
+  Muestra el valor total de cada jugador en las escenas de las supertécnicas:
+  los dos valores en los duelos de regate, defensa y tiro-bloqueo, el del tiro
+  y, al llegar al portero, con cuánto llega el tiro (contando la distancia)
+  contra la parada. El ganador sale en rojo.
+  Cómo se consigue: siempre activo, en cualquier partido.
+
+OJEO INSTANTÁNEO  (carpeta: ojeo_instantaneo)
+  Cuando Celia o Nelly buscan jugadores para ti, la llamada llega al momento
+  en lugar de tener que esperar varios minutos de juego.
+  Cómo se consigue: siempre activo.
+  Se crea con: tu ROM inglesa.
+
+FILTROS DE SUPERTÉCNICAS  (carpeta: filtros_supertecnicas)
+  Botón X "Filtros" en la lista de cuadernos de supertécnicas (Inventario >
+  Supertécnicas > Aprender): filtra por tipo y afinidad, y ordena por PT o
+  por nombre.
+  Cómo se consigue: siempre activo.
+
+COLORES POR AFINIDAD  (carpeta: colores_afinidad)
+  Los nombres de las supertécnicas salen con el color de su afinidad, como en
+  Victory Road: fuego en rojo, aire en azul, bosque en verde y montaña en
+  café; los talentos en morado. En el cartel de la escena de la técnica, en
+  los botones del partido y en los menús.
+  Cómo se consigue: siempre activo.
+
+VOCES JAPONESAS  (carpeta: voces_jp)
+  Las voces originales japonesas: cinemáticas (y el opening japonés) y las
+  voces de los jugadores en los partidos.
+  Cómo se consigue: siempre activo una vez creado.
+  Se crea con: la ROM japonesa (Inazuma Eleven, código YEEJ).
+
+PASIÓN Y AMISTAD AL MÁXIMO  (carpeta: pasion_amistad_max) - desactivado al principio
+  Mantiene la Pasión y la Amistad en 999999. Actívalo solo si lo quieres: lo
+  que ganes mientras está activo se queda en tu partida.
+
+
+SI FALTA UN MOD O NO HACE NADA
+  Vuelve a arrastrar las ROM sobre "PREPARAR - arrastra aqui tus ROM.bat" (en
+  la carpeta principal). Rehace los mods a partir de ellas:
+  - Entrenamiento libre, Mecánicas IE2 u Ojeo instantáneo ... arrastra la ROM
+                                                              inglesa (YEEP).
+  - Diálogos del entrenador en español ....................... arrastra la
+                                                              inglesa Y la
+                                                              española (YEES)
+                                                              juntas.
+  - Voces japonesas .......................................... arrastra la ROM
+                                                              japonesa (YEEJ).
+  Después comprueba que el mod está activado (lanzador > Mods).

@@ -79,6 +79,7 @@ int jugar(const Rutas& r, const Lanzador& L, bool en_red = false) {
     setenv("IE1_MODS_DIR", r.mods.string().c_str(), 1);
     setenv("IE1_VSYNC", L.vsync ? "1" : "0", 1);
     setenv("IE1_WIFI_PEERS", pares.c_str(), 1);
+    setenv("IE1_LANZADOR", "1", 1);
 #endif
 #if defined(_WIN32)
     {   // las DLL del juego estan junto a su ejecutable
@@ -94,48 +95,99 @@ int jugar(const Rutas& r, const Lanzador& L, bool en_red = false) {
         SetEnvironmentVariableA("IE1_MODS_DIR", r.mods.string().c_str());
         SetEnvironmentVariableA("IE1_VSYNC", L.vsync ? "1" : "0");
         SetEnvironmentVariableA("IE1_WIFI_PEERS", pares.empty() ? nullptr : pares.c_str());
+        // el juego sabe que lo abrio el lanzador: Esc > Sistema > Reiniciar cierra el juego
+        // dejando datos/reiniciar.marca y el lanzador lo vuelve a abrir solo (sin ensenarse),
+        // en vez de que el juego abra otra copia de si mismo
+        SetEnvironmentVariableA("IE1_LANZADOR", "1");
     }
+    const fs::path marca_reinicio = r.datos / "reiniciar.marca";
     fs::remove(r.datos / "reinicio.pid", ec);
-    SECURITY_ATTRIBUTES sa{sizeof sa, nullptr, TRUE};
-    const std::string log = (r.datos / "ultima_sesion.log").string();
-    HANDLE hlog = CreateFileA(log.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    STARTUPINFOA si{}; si.cb = sizeof si;
-    if (hlog != INVALID_HANDLE_VALUE) { si.dwFlags = STARTF_USESTDHANDLES; si.hStdOutput = hlog; si.hStdError = hlog; si.hStdInput = GetStdHandle(STD_INPUT_HANDLE); }
-    PROCESS_INFORMATION pi{};
-    std::vector<char> linea(cmd.begin(), cmd.end()); linea.push_back(0);
-    const std::string cwd = r.datos.string();
-    if (!CreateProcessA(nullptr, linea.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, cwd.c_str(), &si, &pi)) {
-        if (hlog != INVALID_HANDLE_VALUE) CloseHandle(hlog);
-        return -1;
-    }
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD codigo = 0; GetExitCodeProcess(pi.hProcess, &codigo);
-    CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
-    // Si el juego se reinicio (Esc > Sistema > Reiniciar), el proceso nuevo deja su
-    // numero en datos/reinicio.pid: se espera tambien a ese (y a los siguientes),
-    // para que el lanzador no vuelva a aparecer con el juego abierto.
-    for (int vueltas = 0; vueltas < 1000; ++vueltas) {
-        const fs::path marca = r.datos / "reinicio.pid";
-        DWORD pid = 0;
-        for (int intento = 0; intento < 20 && !pid; ++intento) {      // el aviso llega justo al salir
-            std::ifstream f(marca);
-            if (f) f >> pid;
-            if (!pid) Sleep(50);
+    fs::remove(marca_reinicio, ec);
+    DWORD codigo = 0;
+    for (bool primera = true;; primera = false) {   // una vuelta por partida; Reiniciar deja la marca
+        SECURITY_ATTRIBUTES sa{sizeof sa, nullptr, TRUE};
+        const std::string log = (r.datos / "ultima_sesion.log").string();
+        // tras un reinicio el registro sigue (no se pierde lo de antes del reinicio)
+        HANDLE hlog = CreateFileA(log.c_str(), GENERIC_WRITE, FILE_SHARE_READ, &sa, primera ? CREATE_ALWAYS : OPEN_ALWAYS,
+                                  FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (!primera && hlog != INVALID_HANDLE_VALUE) SetFilePointer(hlog, 0, nullptr, FILE_END);
+        STARTUPINFOA si{}; si.cb = sizeof si;
+        if (hlog != INVALID_HANDLE_VALUE) { si.dwFlags = STARTF_USESTDHANDLES; si.hStdOutput = hlog; si.hStdError = hlog; si.hStdInput = GetStdHandle(STD_INPUT_HANDLE); }
+        PROCESS_INFORMATION pi{};
+        std::vector<char> linea(cmd.begin(), cmd.end()); linea.push_back(0);
+        const std::string cwd = r.datos.string();
+        if (!CreateProcessA(nullptr, linea.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, cwd.c_str(), &si, &pi)) {
+            if (hlog != INVALID_HANDLE_VALUE) CloseHandle(hlog);
+            return -1;
         }
-        if (!pid) break;
-        std::error_code ec2; fs::remove(marca, ec2);
-        HANDLE h = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (!h) break;
-        WaitForSingleObject(h, INFINITE);
-        GetExitCodeProcess(h, &codigo);
-        CloseHandle(h);
+        WaitForSingleObject(pi.hProcess, INFINITE);
+        GetExitCodeProcess(pi.hProcess, &codigo);
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+        // Un runner antiguo aun abre otra copia del juego al reiniciar y deja su numero en
+        // reinicio.pid: se espera a esa copia para que el lanzador no salga con el juego abierto.
+        for (int vueltas = 0; vueltas < 1000; ++vueltas) {
+            const fs::path marca = r.datos / "reinicio.pid";
+            DWORD pid = 0;
+            {
+                std::ifstream f(marca);
+                if (f) f >> pid;
+            }
+            if (!pid) break;
+            std::error_code ec2; fs::remove(marca, ec2);
+            HANDLE h = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (!h) break;
+            WaitForSingleObject(h, INFINITE);
+            GetExitCodeProcess(h, &codigo);
+            CloseHandle(h);
+        }
+        if (hlog != INVALID_HANDLE_VALUE) CloseHandle(hlog);
+        if (!fs::exists(marca_reinicio, ec)) break;           // salio de verdad: vuelve el lanzador
+        fs::remove(marca_reinicio, ec);                        // Reiniciar: otra vuelta
     }
-    if (hlog != INVALID_HANDLE_VALUE) CloseHandle(hlog);
     return int(codigo);
 #else
     const std::string completo = "cd " + comillas(r.datos) + " && " + cmd + " > ultima_sesion.log 2>&1";
-    return std::system(completo.c_str());
+    const fs::path marca_reinicio = r.datos / "reiniciar.marca";
+    fs::remove(marca_reinicio, ec);
+    int codigo = 0;
+    do {
+        fs::remove(marca_reinicio, ec);
+        codigo = std::system(completo.c_str());
+    } while (fs::exists(marca_reinicio, ec));               // Reiniciar: se vuelve a abrir
+    fs::remove(marca_reinicio, ec);
+    return codigo;
 #endif
+}
+
+// Icono de la ventana: el de la ROM (banner +0x20 dibujo 32x32 de 4 bits en tiles de
+// 8x8, +0x220 paleta BGR555, color 0 transparente). El del .exe lo pone icono.rc.
+SDL_Surface* icono_rom(const fs::path& rom) {
+    std::ifstream f(rom, std::ios::binary);
+    if (!f) return nullptr;
+    uint8_t cab[0x6C];
+    if (!f.read(reinterpret_cast<char*>(cab), sizeof cab)) return nullptr;
+    const uint32_t b = cab[0x68] | cab[0x69] << 8 | cab[0x6A] << 16 | uint32_t(cab[0x6B]) << 24;
+    uint8_t ban[0x240];
+    if (!b || !f.seekg(b) || !f.read(reinterpret_cast<char*>(ban), sizeof ban)) return nullptr;
+    SDL_Surface* s = SDL_CreateSurface(32, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (!s) return nullptr;
+    uint32_t pal[16];
+    for (int i = 0; i < 16; ++i) {
+        const uint16_t c = uint16_t(ban[0x220 + 2 * i] | ban[0x221 + 2 * i] << 8);
+        pal[i] = 0xFF000000u | uint32_t((c & 31) * 255 / 31) << 16 | uint32_t((c >> 5 & 31) * 255 / 31) << 8 |
+                 uint32_t((c >> 10 & 31) * 255 / 31);
+    }
+    for (int t = 0; t < 16; ++t)
+        for (int i = 0; i < 32; ++i) {
+            const uint8_t v = ban[0x20 + t * 32 + i];
+            for (int k = 0; k < 2; ++k) {
+                const int c = k ? v >> 4 : v & 15;
+                const int x = (t % 4) * 8 + (i % 4) * 2 + k, y = (t / 4) * 8 + i / 4;
+                auto* fila = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(s->pixels) + y * s->pitch);
+                fila[x] = c ? pal[c] : 0u;
+            }
+        }
+    return s;
 }
 
 }  // namespace
@@ -153,7 +205,10 @@ int main(int, char**) {
     fs::create_directories(rutas.datos, ec);
     L.iniciar(rom);
 
-    SDL_Window* win = SDL_CreateWindow("Inazuma Eleven", kAncho * 3, kAlto * 3, SDL_WINDOW_RESIZABLE);
+    SDL_Window* win = SDL_CreateWindow("Inazuma Eleven Recomp", kAncho * 3, kAlto * 3, SDL_WINDOW_RESIZABLE);
+    if (win) {
+        if (SDL_Surface* ico = icono_rom(rutas.rom)) { SDL_SetWindowIcon(win, ico); SDL_DestroySurface(ico); }
+    }
     SDL_Renderer* ren = win ? SDL_CreateRenderer(win, nullptr) : nullptr;
     if (!ren) { SDL_Quit(); return 1; }
     SDL_SetRenderVSync(ren, 1);

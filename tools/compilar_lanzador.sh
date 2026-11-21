@@ -12,7 +12,24 @@ SRC=/c/dev/ie1recomp/lanzador
 cd "$SRC"
 command -v pkg-config >/dev/null || { echo "Falta pkg-config (pacman -S mingw-w64-clang-x86_64-pkgconf)"; exit 1; }
 pkg-config --exists sdl3 || { echo "No encuentro SDL3 (pacman -S mingw-w64-clang-x86_64-sdl3)"; exit 1; }
-clang++ -std=c++17 -O2 -Wall lanzador.cpp -o lanzador.exe $(pkg-config --cflags --libs sdl3) -mwindows
+# Icono del .exe: el de la ROM (el que sale en el menu de la DS), con icono_rom.cpp
+ROM=/c/dev/ie1recomp/games/ie1_eur.nds
+ICONO_OBJ=""
+RC=$(command -v llvm-windres || command -v windres || true)
+if [ ! -f icono_rom.cpp ]; then
+    echo "AVISO: falta icono_rom.cpp en $SRC: el .exe sale sin icono."
+elif [ ! -f "$ROM" ]; then
+    echo "AVISO: no encuentro la ROM ($ROM): el .exe sale sin icono."
+elif [ -z "$RC" ]; then
+    echo "AVISO: no encuentro llvm-windres (pacman -S mingw-w64-clang-x86_64-llvm): el .exe sale sin icono."
+else
+    clang++ -std=c++17 -O2 icono_rom.cpp -o icono_rom.exe
+    ./icono_rom.exe "$ROM" icono.ico
+    printf '1 ICON "icono.ico"\n' > icono.rc
+    "$RC" icono.rc -O coff -o icono.o
+    ICONO_OBJ=icono.o
+fi
+clang++ -std=c++17 -O2 -Wall lanzador.cpp $ICONO_OBJ -o lanzador.exe $(pkg-config --cflags --libs sdl3) -mwindows
 # DLL que necesita (SDL3, libc++...) junto al ejecutable
 ldd lanzador.exe | awk '{print $3}' | grep -v -i -E '^/c/windows|^$|not' | sort -u | while read -r dll; do
     [ "$dll" -ef "$SRC/$(basename "$dll")" ] && continue     # ya es la copia de esta carpeta

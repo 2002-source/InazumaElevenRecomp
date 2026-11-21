@@ -11,7 +11,7 @@ and never committed.
 
 - [MSYS2](https://www.msys2.org/), using the **CLANG64** terminal:
   ```
-  pacman -S git mingw-w64-clang-x86_64-{clang,cmake,ninja,python,sdl3,pkgconf}
+  pacman -S git mingw-w64-clang-x86_64-{clang,cmake,ninja,python,sdl3,pkgconf,llvm}
   ```
 
 ## 2. Sources, at the pinned versions
@@ -60,15 +60,23 @@ cd /c/dev/ie1recomp
 python scripts/extraer_rom.py games/ie1_eur.nds images
 bash scripts/ronda.sh            # recompiles using the shipped coverage
 bash scripts/perf.sh             # performance (flat) banks
+python /c/dev/ie1recomp-src/runner-patches/parche_icono_juego.py games/ie1_eur.nds   # .exe icon (from your ROM)
 bash scripts/paso_mingw.sh       # runner for your CPU
 bash scripts/compilar_mods.sh    # mods plugin
 bash scripts/compilar_lanzador.sh
 bash scripts/jugar.sh --execution-model performance
 ```
 
-Optional: Spanish language pack from your Spanish ROM
-(`crear_paquete_idioma.py`, `analizar_cadenas.py`, `crear_parche_textos.py es`)
-and the mods (`crear_npc_entrenador.py`, `crear_mod_niveles.py`).
+Optional: language packs from your Spanish, French, German or Italian ROM
+(`crear_paquete_idioma.py ROM xx`, `analizar_cadenas.py ROM xx`,
+`ampliar_cadenas.py ROM xx`, `crear_parche_textos.py xx`, with `xx` = `es`,
+`fr`, `de` or `it`) and the mods (`crear_npc_entrenador.py`,
+`crear_mod_niveles.py`, `crear_mod_ojeo.py`). The release's drag-and-drop
+preparer (`preparar.py`) does all of this by itself.
+
+The `.exe` icons (launcher and game) are taken from your ROM's DS icon when
+you build: `compilar_lanzador.sh` and `parche_icono_juego.py`. They are not
+in the repository.
 
 ## 5. Release ZIP
 
@@ -90,5 +98,6 @@ the drag-and-drop preparer.
    `.diff` de `runner-patches/`.
 3. Monta `C:\dev\ie1recomp` con las carpetas del paso 3 y tu ROM en
    `games\ie1_eur.nds`.
-4. Recompila y compila con los comandos del paso 4.
+4. Recompila y compila con los comandos del paso 4 (el icono de los .exe sale
+   de tu ROM: `parche_icono_juego.py` y `compilar_lanzador.sh`).
 5. Para el ZIP para jugadores: `paso_port.sh` y `crear_distribucion.sh`.

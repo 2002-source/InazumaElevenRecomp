@@ -8,8 +8,13 @@ la usan. Como el ARM9 espanol tiene la misma estructura (solo recolocada),
 el puntero equivalente del ARM9 espanol apunta a la cadena traducida: asi se
 emparejan las dos versiones sin depender del orden.
 
+Sirve para cualquier idioma (es, fr, de, it): el desplazamiento de las tablas de textos
+de cada version se calcula solo (revisar_roms_idiomas.py).
+
 Uso (desde C:/dev/ie1recomp):
   python scripts/analizar_cadenas.py "/c/ruta/rom_es.nds" > run/cadenas.txt
+  python scripts/analizar_cadenas.py games/ie1_fr.nds fr > run/cadenas_fr.txt
+Salida: run/cadenas_<idioma>.json (y run/cadenas_reservadas[_<idioma>].json)
 """
 import os, re, struct, sys
 from bisect import bisect_right
@@ -20,7 +25,7 @@ from comparar_codigo import partes
 
 BASE = 0x02000000
 INI_DATOS = 0x020A0000          # zona donde buscar cadenas (datos del final del ARM9)
-DESPL = 0x440                   # desplazamiento de la version espanola tras la tabla
+DESPL = 0x440                   # desplazamiento tras la tabla (espanola: 0x440; se calcula en main)
 
 
 def es_letra(b):
@@ -75,7 +80,15 @@ def refs_de(a9, cads):
 
 def main():
     en = open(os.path.join("images", "arm9.bin"), "rb").read()
+    global DESPL
     es, _, _ = arm9(sys.argv[1])
+    idioma = sys.argv[2] if len(sys.argv) > 2 else "es"
+    from revisar_roms_idiomas import desplazamiento
+    d, n, total = desplazamiento(en, es)
+    if n < total * 0.8:
+        sys.exit(f"No encuentro las tablas de textos en esta ROM (cuadran {n} de {total}); no hago nada.")
+    DESPL = d + 4
+    print(f"Idioma {idioma}: tablas de textos desplazadas {d:#x}")
     def bss_de(a9):
         return struct.unpack_from("<I", a9, a9.find(struct.pack("<II", 0xDEC00621, 0x2106C0DE)) - 0x1C + 12)[0]
     ce = cadenas(en, INI_DATOS - BASE, bss_de(en) - BASE)
@@ -267,22 +280,23 @@ def main():
     # Textos usados desde overlays que NO cambian o no tienen pareja: su sitio
     # no se puede reutilizar para otros textos.
     reservados = sorted(a for a in fijos if a not in distintas)
-    json.dump([f"0x{a:08X}" for a in reservados],
-              open(os.path.join("run", "cadenas_reservadas.json"), "w"))
     os.makedirs("run", exist_ok=True)
-    json.dump(salida, open(os.path.join("run", "cadenas_es.json"), "w"), indent=1)
-    print("Traducciones guardadas en run/cadenas_es.json")
+    nombre_res = "cadenas_reservadas.json" if idioma == "es" else f"cadenas_reservadas_{idioma}.json"
+    json.dump([f"0x{a:08X}" for a in reservados], open(os.path.join("run", nombre_res), "w"))
+    json.dump(salida, open(os.path.join("run", f"cadenas_{idioma}.json"), "w"), indent=1)
+    print(f"Traducciones guardadas en run/cadenas_{idioma}.json")
     # Textos de interfaz con referencias que se quedaron SIN pareja
     def legible(b):          # texto latino (no nombres internos en japones)
         return sum(1 for c in b if 0x20 <= c < 0x7F) >= 0.8 * len(b)
     sin = sorted(a for a in {t for _, t in re_en}
                  if a >= 0x020B0000 and a not in traduccion and legible(ce[a]))
-    with open(os.path.join("run", "cadenas_sin_pareja.txt"), "w", encoding="latin-1") as f:
+    with open(os.path.join("run", "cadenas_sin_pareja.txt" if idioma == "es" else f"cadenas_sin_pareja_{idioma}.txt"),
+              "w", encoding="latin-1") as f:
         for a in sin:
             xs = [x for x, t in re_en if t == a][:3]
             f.write(f"0x{a:08X} {ce[a].decode('latin-1')!r:40.40} " +
                     " ".join(f"0x{x:08X}" for x in xs) + "\n")
-    print(f"Textos de interfaz sin pareja: {len(sin)} (lista en run/cadenas_sin_pareja.txt)")
+    print(f"Textos de interfaz sin pareja: {len(sin)} (lista en run/cadenas_sin_pareja*.txt)")
     print()
     for a in sorted(distintas):
         b = distintas[a]

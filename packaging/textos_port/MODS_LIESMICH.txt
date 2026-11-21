@@ -1,0 +1,91 @@
+MODS - INAZUMA ELEVEN RECOMP  v1.1
+==================================
+(English: README.txt - Español: LEEME.txt - Français : LISEZMOI.txt -
+Italiano: LEGGIMI.txt)
+
+Schalte Mods im Launcher (Mods) oder im Esc-Menü des Spiels (Mods) an oder
+aus. Änderungen gelten beim Spielstart oder nach Esc > System > Neustart. Im
+Launcher zeigt Tab oder ein Rechtsklick auf einen Mod, was er macht. mods.cfg
+listet die aktiven Mods, einer pro Zeile. Das Vorbereitungsprogramm schaltet
+alle enthaltenen Mods ein außer "Leidenschaft und Freundschaft max".
+
+
+FREIES TRAINING  (Ordner: entrenamiento_libre)
+  Ein Trainer oben auf dem Turm öffnet ein Menü zum Trainieren deiner
+  Spieler: GP, TP und Werte gegen Leidenschaft (450 pro Punkt).
+  Y: Der Spieler steigt gegen Leidenschaft im Level auf (225 pro gewonnenem
+     Wertpunkt, mindestens 100 pro Level); Werte, GP, TP und Techniken sind
+     die, die das Spiel vergibt.
+  X: Der Spieler kehrt kostenlos auf Level 1 zurück: Er behält seine
+     Techniken und verliert alles Trainierte (mit IE2-Mechaniken gehen seine
+     Techniken auf 0 Einsätze zurück).
+  So bekommst du ihn: Beende die Geschichte (gewinne den Football Frontier)
+  und geh ganz nach oben auf den Turm.
+  Erstellt aus: deiner englischen ROM.
+
+IE2-MECHANIKEN  (Ordner: mecanicas_ie2)
+  Die Mechaniken von Inazuma Eleven 2, mit dem eigenen Code des Spiels (er war
+  abgeschaltet):
+  - Technik-Stufen: Spezialtechniken steigen durch Benutzung auf (Hinweis
+    "Lv +" und das Stufenzeichen neben dem Namen, in Menüs und beim Einsatz).
+  - Schuss: Schuss-Taste auf dem Touchscreen (verschiebbar), Fernschüsse von
+    außerhalb des Strafraums (Zeichen L neben dem Namen) und der blaue
+    Schussbereich.
+  - Schussblocks mit Abwehr- oder Schusstechniken (Zeichen B).
+  - Talente mit ihrer Wirkung im Spiel.
+  - Nach der Geschichte ist Mark nicht mehr fest: Er kann das Team und den
+    ersten Platz verlassen.
+  - Bei Zufallsbegegnungen verdoppelt ein Sieg mit 5 oder mehr Toren
+    Unterschied ohne Gegentor die Erfahrung ("x2!!" bei jedem Spieler,
+    Gesamtwert in Magenta).
+  Dein Spielstand ändert sich nicht, außer der Zahl der Einsätze jeder
+  Technik (die das Spiel schon speicherte).
+  So bekommst du ihn: immer aktiv.
+  Erstellt aus: deiner englischen ROM (plus die enthaltenen IE2-Daten).
+
+KRAFT BEI SPEZIALTECHNIKEN  (Ordner: valor_escenas)
+  Zeigt die Gesamtkraft jedes Spielers in den Szenen der Spezialtechniken:
+  beide Werte bei Dribbling-, Abwehr- und Schuss-Block-Duellen, den Wert des
+  Schusses und, wenn er den Torwart erreicht, mit wie viel Kraft er ankommt
+  (mit Entfernung) gegen die Parade. Der Sieger erscheint rot.
+  So bekommst du ihn: immer aktiv, in jedem Spiel.
+
+SOFORTIGE SPIELERSUCHE  (Ordner: ojeo_instantaneo)
+  Wenn Celia oder Nelly Spieler für dich suchen, kommt der Anruf sofort statt
+  nach mehreren Minuten Spielzeit.
+  So bekommst du ihn: immer aktiv.
+  Erstellt aus: deiner englischen ROM.
+
+FILTER FÜR SPEZIALTECHNIKEN  (Ordner: filtros_supertecnicas)
+  X-Taste "Filter" in der Liste der Technik-Notizbücher (Inventar > Techniken
+  > Lernen): filtert nach Typ und Element und sortiert nach TP oder Name.
+  So bekommst du ihn: immer aktiv.
+
+FARBEN NACH ELEMENT  (Ordner: colores_afinidad)
+  Die Namen der Spezialtechniken erscheinen in der Farbe ihres Elements, wie
+  in Victory Road: Feuer rot, Wind blau, Wald grün und Berg braun; Talente
+  lila. Auf dem Banner der Technik, auf den Technik-Tasten im Spiel und in den
+  Menüs.
+  So bekommst du ihn: immer aktiv.
+
+JAPANISCHE STIMMEN  (Ordner: voces_jp)
+  Die originalen japanischen Stimmen: Zwischensequenzen (und das japanische
+  Opening) und die Stimmen der Spieler in den Spielen.
+  So bekommst du ihn: immer aktiv, sobald er erstellt ist.
+  Erstellt aus: der japanischen ROM (Inazuma Eleven, Code YEEJ).
+
+LEIDENSCHAFT UND FREUNDSCHAFT MAX  (Ordner: pasion_amistad_max) - anfangs aus
+  Hält Leidenschaft und Freundschaft auf 999999. Schalte ihn nur ein, wenn du
+  willst: Was du gewinnst, solange er aktiv ist, bleibt in deinem Spielstand.
+
+
+WENN EIN MOD FEHLT ODER NICHTS TUT
+  Ziehe die ROMs erneut auf "PREPARAR - arrastra aqui tus ROM.bat" (im
+  Hauptordner). Es erstellt die Mods daraus neu:
+  - Freies Training, IE2-Mechaniken oder Sofortige Spielersuche ... ziehe die
+                                                                   englische
+                                                                   ROM (YEEP).
+  - Japanische Stimmen ............................................ ziehe die
+                                                                   japanische
+                                                                   ROM (YEEJ).
+  Prüfe danach, ob der Mod eingeschaltet ist (Launcher > Mods).

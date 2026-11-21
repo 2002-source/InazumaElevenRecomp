@@ -1,6 +1,11 @@
 # Semillas ARM9 obtenidas de la cobertura (semillas_cobertura.py)
 
 [[entry_point]]
+addr = 0x01FF852C
+mode = "arm"
+name = "cov_01FF852C"
+
+[[entry_point]]
 addr = 0x01FF85CC
 mode = "arm"
 name = "cov_01FF85CC"
@@ -7966,6 +7971,16 @@ mode = "arm"
 name = "cov_0206B9C4"
 
 [[entry_point]]
+addr = 0x0206BA84
+mode = "arm"
+name = "cov_0206BA84"
+
+[[entry_point]]
+addr = 0x0206BD24
+mode = "arm"
+name = "cov_0206BD24"
+
+[[entry_point]]
 addr = 0x0206BF2C
 mode = "arm"
 name = "cov_0206BF2C"
@@ -9121,6 +9136,11 @@ mode = "arm"
 name = "cov_02076858"
 
 [[entry_point]]
+addr = 0x02076868
+mode = "arm"
+name = "cov_02076868"
+
+[[entry_point]]
 addr = 0x020768E4
 mode = "arm"
 name = "cov_020768E4"
@@ -9394,6 +9414,11 @@ name = "cov_02078D74"
 addr = 0x02078D84
 mode = "arm"
 name = "cov_02078D84"
+
+[[entry_point]]
+addr = 0x02078EA8
+mode = "arm"
+name = "cov_02078EA8"
 
 [[entry_point]]
 addr = 0x02078F14
@@ -9689,6 +9714,11 @@ name = "cov_0207AA58"
 addr = 0x0207AA94
 mode = "arm"
 name = "cov_0207AA94"
+
+[[entry_point]]
+addr = 0x0207AAF4
+mode = "arm"
+name = "cov_0207AAF4"
 
 [[entry_point]]
 addr = 0x0207AB64
@@ -10201,6 +10231,11 @@ mode = "arm"
 name = "cov_0207EF0C"
 
 [[entry_point]]
+addr = 0x0207EF30
+mode = "arm"
+name = "cov_0207EF30"
+
+[[entry_point]]
 addr = 0x0207EF54
 mode = "arm"
 name = "cov_0207EF54"
@@ -10699,6 +10734,11 @@ name = "cov_0208164C"
 addr = 0x02081678
 mode = "arm"
 name = "cov_02081678"
+
+[[entry_point]]
+addr = 0x020816DC
+mode = "arm"
+name = "cov_020816DC"
 
 [[entry_point]]
 addr = 0x02081740
@@ -15274,6 +15314,11 @@ name = "cov_0209B0D4"
 addr = 0x0209B0E0
 mode = "arm"
 name = "cov_0209B0E0"
+
+[[entry_point]]
+addr = 0x0209B0EC
+mode = "arm"
+name = "cov_0209B0EC"
 
 [[entry_point]]
 addr = 0x0209B16C

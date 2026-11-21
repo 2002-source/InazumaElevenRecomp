@@ -157,18 +157,28 @@ struct Fuente {
     }
 };
 
-// Texto propio (UTF-8) -> codificacion del juego (tabla 0xA1-0xDF de sus fuentes)
+// Texto propio (UTF-8) -> codificacion del juego (tabla 0xA1-0xDF de sus fuentes): las letras
+// con tilde de los cinco idiomas (es, fr, de, it). La ss alemana no esta en la fuente: "ss".
 inline std::string juego(const std::string& utf8) {
     static const struct { const char* u; char g; } k[] = {
-        {"\xC3\xA1", '\xB2'}, {"\xC3\xA9", '\xBA'}, {"\xC3\xAD", '\xBE'}, {"\xC3\xB3", '\xC4'},
-        {"\xC3\xBA", '\xCA'}, {"\xC3\xB1", '\xC2'}, {"\xC3\x91", '\xA9'}, {"\xC3\xBC", '\xCC'},
-        {"\xC3\x81", '\xD1'}, {"\xC3\x89", '\xD9'}, {"\xC3\x8D", '\xA6'}, {"\xC3\x93", '\xAB'},
-        {"\xC3\x9A", '\xA2'}, {"\xC2\xBF", '\xA5'}, {"\xC2\xA1", '\xDF'}};
+        {"\xC3\x99", '\xA1'}, {"\xC3\x9A", '\xA2'}, {"\xC3\x9B", '\xA3'}, {"\xC3\x9C", '\xA4'}, {"\xC2\xBF", '\xA5'}, {"\xC3\x8D", '\xA6'},
+        {"\xC3\x8F", '\xA7'}, {"\xC3\x91", '\xA9'}, {"\xC3\x92", '\xAA'}, {"\xC3\x93", '\xAB'}, {"\xC3\x94", '\xAC'}, {"\xC3\x95", '\xAD'},
+        {"\xC3\x96", '\xAE'}, {"\xC3\x98", '\xAF'}, {"\xC3\xA0", '\xB1'}, {"\xC3\xA1", '\xB2'}, {"\xC3\xA2", '\xB3'}, {"\xC3\xA3", '\xB4'},
+        {"\xC3\xA4", '\xB5'}, {"\xC5\x93", '\xB6'}, {"\xC3\xA6", '\xB7'}, {"\xC3\xA7", '\xB8'}, {"\xC3\xA8", '\xB9'}, {"\xC3\xA9", '\xBA'},
+        {"\xC3\xAA", '\xBB'}, {"\xC3\xAB", '\xBC'}, {"\xC3\xAC", '\xBD'}, {"\xC3\xAD", '\xBE'}, {"\xC3\xAE", '\xBF'}, {"\xC3\xAF", '\xC0'},
+        {"\xC3\xB1", '\xC2'}, {"\xC3\xB2", '\xC3'}, {"\xC3\xB3", '\xC4'}, {"\xC3\xB4", '\xC5'}, {"\xC3\xB5", '\xC6'}, {"\xC3\xB6", '\xC7'},
+        {"\xC3\xB9", '\xC9'}, {"\xC3\xBA", '\xCA'}, {"\xC3\xBB", '\xCB'}, {"\xC3\xBC", '\xCC'}, {"\xC3\xBD", '\xCD'}, {"\xE2\x82\xAC", '\xCE'},
+        {"\xC3\xBF", '\xCF'}, {"\xC3\x80", '\xD0'}, {"\xC3\x81", '\xD1'}, {"\xC3\x82", '\xD2'}, {"\xC3\x83", '\xD3'}, {"\xC3\x84", '\xD4'},
+        {"\xC5\x92", '\xD5'}, {"\xC3\x86", '\xD6'}, {"\xC3\x87", '\xD7'}, {"\xC3\x88", '\xD8'}, {"\xC3\x89", '\xD9'}, {"\xC3\x8A", '\xDA'},
+        {"\xC3\x8B", '\xDB'}, {"\xC3\x8C", '\xDC'}, {"\xC3\x8E", '\xDD'}, {"\xC5\xB8", '\xDE'}, {"\xC2\xA1", '\xDF'}};
     std::string r;
     for (size_t i = 0; i < utf8.size();) {
+        if (!utf8.compare(i, 2, "\xC3\x9F")) { r += "ss"; i += 2; continue; }
         bool hecho = false;
-        for (const auto& e : k)
-            if (!utf8.compare(i, 2, e.u)) { r += e.g; i += 2; hecho = true; break; }
+        for (const auto& e : k) {
+            const size_t n = std::strlen(e.u);
+            if (!utf8.compare(i, n, e.u)) { r += e.g; i += n; hecho = true; break; }
+        }
         if (hecho) continue;
         if ((unsigned char)utf8[i] >= 0x80) { ++i; continue; }
         r += utf8[i++];
@@ -199,6 +209,42 @@ inline Textos textos_para(const std::string& lang) {
              "Puerto", "Conectar y jugar", "Misma red o Radmin VPN / ZeroTier. Cortafuegos: Permitir",
              "Escribe la IP y pulsa Intro", "Falta la IP del otro PC"};
         t.botones_ds = {"A", "B", "Select", "Start", "Derecha", "Izquierda", "Arriba", "Abajo", "R", "L", "X", "Y"};
+    } else if (lang == "fr") {
+        t = {"Jouer", "Mods", "Options", "Quitter", "Retour", "Mode", "Performances", "Normal", "VSync", "Oui", "Non",
+             "Commandes", "Appuie sur une touche... (Échap : annuler)", "Aucun mod dans le dossier mods",
+             "Les changements s'appliquent en jouant", "Enregistré", "Réinitialiser les commandes", "Langue",
+             "Voix", "Écran", "Fenêtre", "Plein écran", "Taille", "Disposition", "Vertical", "Horizontal",
+             "Mise à l'échelle", "Remplir", "Entier",
+             "Entrée ou clic : infos du mod", "Ce mod n'a pas de description.", "Appuie sur une touche pour fermer",
+             "Activer", "Désactiver", "État : activé", "État : désactivé",
+             "Jouer en réseau", "Joueur", "1 (hôte)", "2 (invité)", "IP de l'autre PC", "non définie",
+             "Port", "Se connecter et jouer", "Même réseau ou Radmin VPN / ZeroTier. Pare-feu : Autoriser",
+             "Écris l'IP et appuie sur Entrée", "Il manque l'IP de l'autre PC"};
+        t.botones_ds = {"A", "B", "Select", "Start", "Droite", "Gauche", "Haut", "Bas", "R", "L", "X", "Y"};
+    } else if (lang == "de" || lang == "ge") {
+        t = {"Spielen", "Mods", "Optionen", "Beenden", "Zurück", "Modus", "Leistung", "Normal", "VSync", "An", "Aus",
+             "Steuerung", "Drücke eine Taste... (Esc: abbrechen)", "Keine Mods im Ordner mods",
+             "Änderungen gelten beim Spielen", "Gespeichert", "Steuerung zurücksetzen", "Sprache",
+             "Stimmen", "Bildschirm", "Fenster", "Vollbild", "Größe", "Anordnung", "Vertikal", "Horizontal",
+             "Skalierung", "Füllen", "Ganzzahlig",
+             "Enter oder Klick: Mod-Infos", "Dieser Mod hat keine Beschreibung.", "Beliebige Taste zum Schließen",
+             "Aktivieren", "Deaktivieren", "Status: aktiv", "Status: inaktiv",
+             "Im Netzwerk spielen", "Spieler", "1 (Host)", "2 (Gast)", "IP des anderen PCs", "nicht gesetzt",
+             "Port", "Verbinden und spielen", "Gleiches Netz oder Radmin VPN / ZeroTier. Firewall: Zulassen",
+             "IP eingeben und Enter drücken", "Die IP des anderen PCs fehlt"};
+        t.botones_ds = {"A", "B", "Select", "Start", "Rechts", "Links", "Oben", "Unten", "R", "L", "X", "Y"};
+    } else if (lang == "it") {
+        t = {"Gioca", "Mod", "Opzioni", "Esci", "Indietro", "Modalità", "Prestazioni", "Normale", "VSync", "Sì", "No",
+             "Comandi", "Premi un tasto... (Esc: annulla)", "Nessuna mod nella cartella mods",
+             "Le modifiche si applicano giocando", "Salvato", "Ripristina i comandi", "Lingua",
+             "Voci", "Schermo", "Finestra", "Schermo intero", "Dimensione", "Disposizione", "Verticale", "Orizzontale",
+             "Scala", "Riempi", "Intera",
+             "Invio o clic: info sulla mod", "Questa mod non ha una descrizione.", "Premi un tasto per chiudere",
+             "Attiva", "Disattiva", "Stato: attiva", "Stato: disattivata",
+             "Gioca in rete", "Giocatore", "1 (host)", "2 (ospite)", "IP dell'altro PC", "non impostato",
+             "Porta", "Connetti e gioca", "Stessa rete o Radmin VPN / ZeroTier. Firewall: Consenti",
+             "Scrivi l'IP e premi Invio", "Manca l'IP dell'altro PC"};
+        t.botones_ds = {"A", "B", "Select", "Start", "Destra", "Sinistra", "Su", "Giù", "R", "L", "X", "Y"};
     } else {
         t = {"Play", "Mods", "Options", "Quit", "Back", "Mode", "Performance", "Normal", "VSync", "On", "Off",
              "Controls", "Press a key... (Esc: cancel)", "No mods in the mods folder",
@@ -215,13 +261,20 @@ inline Textos textos_para(const std::string& lang) {
     return t;
 }
 inline std::string nombre_idioma(const std::string& c, const std::string& ui) {
-    static const std::map<std::string, std::pair<const char*, const char*>> k = {
-        {"en", {"Inglés", "English"}}, {"es", {"Español", "Spanish"}}, {"fr", {"Francés", "French"}},
-        {"ge", {"Alemán", "German"}}, {"de", {"Alemán", "German"}}, {"it", {"Italiano", "Italian"}},
-        {"jp", {"Japonés", "Japanese"}}, {"ja", {"Japonés", "Japanese"}}};
-    const auto it = k.find(c);
+    // en, es, fr, de, it (nombre de cada idioma en el idioma del lanzador)
+    static const std::map<std::string, std::array<const char*, 5>> k = {
+        {"en", {"English", "Inglés", "Anglais", "Englisch", "Inglese"}},
+        {"es", {"Spanish", "Español", "Espagnol", "Spanisch", "Spagnolo"}},
+        {"fr", {"French", "Francés", "Français", "Französisch", "Francese"}},
+        {"de", {"German", "Alemán", "Allemand", "Deutsch", "Tedesco"}},
+        {"it", {"Italian", "Italiano", "Italien", "Italienisch", "Italiano"}},
+        {"jp", {"Japanese", "Japonés", "Japonais", "Japanisch", "Giapponese"}}};
+    auto norm = [](const std::string& x) { return x == "sp" ? std::string("es") : x == "ge" ? std::string("de") : x == "ja" ? std::string("jp") : x; };
+    const auto it = k.find(norm(c));
     if (it == k.end()) return c;
-    return ui == "es" ? it->second.first : it->second.second;
+    const std::string u = norm(ui);
+    const int n = u == "es" ? 1 : u == "fr" ? 2 : u == "de" ? 3 : u == "it" ? 4 : 0;
+    return it->second[size_t(n)];
 }
 // claves de controles.cfg (las lee el runner) y teclas por defecto (nombres SDL)
 inline const std::vector<std::string>& claves_ds() {
@@ -403,16 +456,21 @@ private:
             if (!e.is_directory()) continue;
             Mod m; m.carpeta = e.path().filename().string(); m.nombre = m.carpeta;
             const auto info = leer_cfg(e.path() / "mod.txt");
-            // mod.txt: nombre, descripcion y desbloqueo (en espanol) y sus versiones _en
+            // mod.txt: nombre, descripcion y desbloqueo (en espanol) y sus versiones _en, _fr,
+            // _de, _it (si falta la del idioma, la inglesa; si tampoco, la espanola)
             const bool es = idioma == "es";
+            const std::string suf = idioma == "ge" ? "_de" : "_" + idioma;
             auto campo = [&](const std::string& k) {
+                if (!es && info.count(k + suf)) return info.at(k + suf);
                 if (!es && info.count(k + "_en")) return info.at(k + "_en");
                 return info.count(k) ? info.at(k) : std::string();
             };
             if (!campo("nombre").empty()) m.nombre = campo("nombre");
             m.info = campo("descripcion");
             const std::string desb = campo("desbloqueo");
-            if (!desb.empty()) m.info += (m.info.empty() ? "" : "\n\n") + std::string(es ? "Cómo se consigue: " : "How to get it: ") + desb;
+            if (!desb.empty()) m.info += (m.info.empty() ? "" : "\n\n") + std::string(es ? "Cómo se consigue: " : idioma == "fr" ? "Comment l'obtenir : "
+                          : (idioma == "de" || idioma == "ge") ? "So bekommst du ihn: " : idioma == "it" ? "Come ottenerla: "
+                          : "How to get it: ") + desb;
             m.activo = std::find(activos.begin(), activos.end(), m.carpeta) != activos.end();
             mods_.push_back(m);
         }

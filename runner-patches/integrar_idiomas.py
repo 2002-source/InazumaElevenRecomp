@@ -189,10 +189,19 @@ void relanzar() {
 #endif
 }
 }  // namespace
-extern "C" void ie1_reiniciar_programa() {
+extern "C" void ie1_reiniciar_programa() {  // IE1_REINICIO_LANZADOR2
     static bool hecho = false;
     if (hecho) return;
     hecho = true;
+    // Abierto desde el lanzador (IE1_LANZADOR=1): el juego se cierra (guardando como al
+    // salir) y deja reiniciar.marca; el lanzador lo vuelve a abrir solo, sin ensenarse.
+    if (const char* l = std::getenv("IE1_LANZADOR"); l && *l == '1') {
+        std::remove("reinicio.pid");
+        if (std::FILE* m = std::fopen("reiniciar.marca", "wb")) { std::fputs("1\n", m); std::fclose(m); }
+        std::fprintf(stderr, "[menu] reiniciar: el lanzador vuelve a abrir el juego\n");
+        return;
+    }
+    // Sin lanzador (por ejemplo desde el .bat): se abre otra vez el mismo ejecutable.
     // Las variables que vinieron de idiomas.cfg se quitan, para que el proceso
     // nuevo vuelva a leer el archivo (por si el idioma se cambio en el menu).
     for (const char* v : g_desde_cfg) poner_env(v, "");
